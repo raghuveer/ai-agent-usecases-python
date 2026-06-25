@@ -48,3 +48,13 @@ jobs:
       - name: Unit tests (offline, integration deselected)
         working-directory: ${{ matrix.project }}
         run: uv run pytest -q -m "not integration" tests/test_unit.py
+      - name: Dependency CVE audit (pip-audit)
+        working-directory: ${{ matrix.project }}
+        # Audits the project's installed dependency tree against OSV/PyPI advisories
+        # and fails the build on any known vulnerability. The chromadb advisory is
+        # ignored as an accepted residual: it is a server-side CVE with no published
+        # fix, and these examples use chromadb in embedded mode (see docs/security-review.md).
+        run: >
+          uv run --with pip-audit pip-audit
+          --ignore-vuln GHSA-f4j7-r4q5-qw2c
+          --ignore-vuln CVE-2026-45829
