@@ -1,0 +1,50 @@
+name: unit-tests
+
+# Runs the offline, fully-mocked unit tests for every example project.
+# Integration tests (marked `integration`, which call the live gateway) are
+# deliberately NOT run in CI — they need the local AI Utility Platform + a
+# virtual key. Unit tests mock the LLM and require no network beyond PyPI.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      projects: ${{ steps.find.outputs.projects }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: find
+        # Every directory containing tests/test_unit.py becomes a matrix entry.
+        run: |
+          projects=$(find raw-api langchain langgraph -type f -path '*/tests/test_unit.py' \
+            -printf '%h\n' | sed 's#/tests$##' | sort | jq -R . | jq -cs .)
+          echo "projects=$projects" >> "$GITHUB_OUTPUT"
+          echo "Discovered projects:"; echo "$projects" | jq .
+
+  unit:
+    needs: discover
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ${{ fromJson(needs.discover.outputs.projects) }}
+    name: ${{ matrix.project }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Create venv + install (dev extras)
+        working-directory: ${{ matrix.project }}
+        run: |
+          uv venv
+          uv pip install -e ".[dev]"
+      - name: Unit tests (offline, integration deselected)
+        working-directory: ${{ matrix.project }}
+        run: uv run pytest -q -m "not integration" tests/test_unit.py

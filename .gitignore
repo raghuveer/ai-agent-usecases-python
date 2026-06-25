@@ -26,6 +26,9 @@ env/
 *.sqlite
 *.sqlite3
 
+# --- Internal planning notes (not for the public repo) ---
+ai-usecases-notes.txt
+
 # --- OS / editor ---
 .DS_Store
 Thumbs.db
