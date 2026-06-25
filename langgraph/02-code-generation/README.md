@@ -16,6 +16,20 @@ with a real `generate -> check -> (loop | END)` cycle.
   node is a pass-through (`tests_passed=null`). Enable with `RUN_CODE_CHECK=1`
   (python only), capped at 2 iterations.
 
+## ⚠️ Security
+
+Running model-generated code is **arbitrary code execution**. The smoke check
+(`smoke_check_python`) runs whatever the model emits as a subprocess on the host,
+with the same privileges, filesystem, and environment (including any secrets) as
+this process — the only guardrail is a wall-clock timeout.
+
+It is **OFF by default** (`RUN_CODE_CHECK=0`) and should stay off for any
+untrusted input. If you enable it, run the executor inside a real **isolated
+sandbox**: a disposable container or VM with **no network**, strict
+**CPU/memory/time limits**, an ephemeral/read-only filesystem, an unprivileged
+user, and **no host secrets** in the environment. Never point this at production
+or a machine with credentials.
+
 ## How it works
 
 ```

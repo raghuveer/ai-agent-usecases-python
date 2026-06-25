@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from langchain_core.language_models import BaseChatModel
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .llm import build_llm
 from .rag import Retriever, build_rag_graph, ingest_corpus, sources_from_docs
@@ -24,8 +24,8 @@ USECASE = "01-rag"
 
 
 class RunRequest(BaseModel):
-    question: str
-    top_k: int | None = None
+    question: str = Field(max_length=8000)
+    top_k: int | None = Field(default=None, ge=1, le=50)
 
 
 class Source(BaseModel):

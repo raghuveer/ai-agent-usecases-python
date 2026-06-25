@@ -13,7 +13,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import agent, llm
 from .settings import get_settings
@@ -23,8 +23,8 @@ USECASE = "04-research-agent"
 
 
 class RunRequest(BaseModel):
-    question: str
-    max_steps: int | None = None
+    question: str = Field(max_length=8000)
+    max_steps: int | None = Field(default=None, ge=1, le=12)
 
 
 class StepModel(BaseModel):

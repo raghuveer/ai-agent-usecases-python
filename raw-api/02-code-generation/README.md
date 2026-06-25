@@ -15,6 +15,21 @@ and the optional safety check all hand-written so you can see exactly what runs.
   self-check (`RUN_CODE_CHECK=1`, python only) smoke-runs the code in a
   subprocess with a timeout and iterates on failure (capped at 2 attempts).
 
+## ⚠️ Security
+
+Executing model-generated code is **dangerous: it is arbitrary code execution.**
+The code comes from the LLM and is untrusted — running it can read/write/delete
+files, open network connections, exfiltrate environment variables and secrets,
+spawn processes, or exhaust resources. The subprocess `timeout` bounds wall-clock
+time only; it is **not** a sandbox.
+
+For this reason the smoke-check is **OFF by default** (`RUN_CODE_CHECK=0`) and
+`/run` never executes generated code unless you explicitly opt in. If you enable
+it, run it **only inside an isolated, disposable sandbox** — a throwaway
+container or VM with **no network**, strict CPU/memory/time and filesystem
+limits, an unprivileged user, and **no secrets or credentials** reachable from
+the host. **Never run model-generated code directly on a host you care about.**
+
 ## How it works
 
 1. **Prompt** (`codegen.build_prompt`): instruct the coder model to return one

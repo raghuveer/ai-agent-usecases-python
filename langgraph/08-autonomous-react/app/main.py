@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from langchain_core.language_models import BaseChatModel
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .llm import build_llm
 from .react import run_react
@@ -24,8 +24,8 @@ USECASE = "08-autonomous-react"
 
 
 class RunRequest(BaseModel):
-    task: str
-    max_steps: int | None = None
+    task: str = Field(max_length=8000)
+    max_steps: int | None = Field(default=None, ge=1, le=12)
 
 
 class StepModel(BaseModel):

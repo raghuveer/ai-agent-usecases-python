@@ -16,7 +16,7 @@ from fastapi import FastAPI
 from langchain_core.documents import Document
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.retrievers import BaseRetriever
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .llm import build_llm
 from .rag import answer_question, build_vectorstore
@@ -27,8 +27,8 @@ USECASE = "01-rag"
 
 
 class RunRequest(BaseModel):
-    question: str
-    top_k: int | None = None
+    question: str = Field(max_length=8000)
+    top_k: int | None = Field(default=None, ge=1, le=50)
 
 
 class Source(BaseModel):

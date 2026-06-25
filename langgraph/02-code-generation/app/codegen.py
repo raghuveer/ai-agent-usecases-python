@@ -74,6 +74,18 @@ def smoke_check_python(code: str, timeout: int) -> bool:
 
     Trivial smoke check (imports/executes). OFF by default; only ever called
     when the caller opts in. Zero exit within the timeout is a pass.
+
+    ⚠️ SECURITY — ARBITRARY CODE EXECUTION. This executes model-generated
+    code on the host with the same privileges, filesystem access, and
+    environment (including any secrets) as this process. The only guardrail
+    here is the wall-clock ``timeout``; there is NO sandboxing, no memory/CPU
+    limit, and no network isolation. It is disabled by default
+    (``settings.run_code_check`` is False) and must stay that way in any
+    untrusted setting. If you enable it, run the subprocess inside a real
+    isolated sandbox — a disposable container or VM with no network, strict
+    CPU/memory/time limits, a read-only/ephemeral filesystem, an unprivileged
+    user, and no host secrets in the environment. Do NOT run untrusted code
+    with this function as-is.
     """
     tmp = Path(tempfile.mkdtemp()) / "candidate.py"
     tmp.write_text(code, encoding="utf-8")

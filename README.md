@@ -98,6 +98,8 @@ CI (`.github/workflows/ci.yml`) runs the **unit tests only** across all projects
 - `SPEC.md` — project contract, model strategy, testing & cost rules.
 - `PLAN.md` — phased build order and final status.
 - `TRACKING.md` — feasibility matrix & per-cell build status.
+- `SECURITY.md` — disclosure policy & scope.
+- `docs/security-review.md` — security review vs NIST · OWASP LLM Top 10 · OWASP Web Top 10 (SAST, dependency-CVE, IaC, DAST).
 
 ## License & credits
 

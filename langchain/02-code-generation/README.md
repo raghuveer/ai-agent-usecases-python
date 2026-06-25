@@ -16,6 +16,21 @@ fenced-block extraction and an optional safety check around it.
   self-check (`RUN_CODE_CHECK=1`, python only) smoke-runs the code in a
   subprocess with a timeout and iterates on failure (capped at 2 attempts).
 
+## ⚠️ Security
+
+The optional self-check **executes model-generated code**, which is **arbitrary
+code execution**. As written, `smoke_check_python` only enforces a wall-clock
+timeout — the subprocess otherwise inherits this process's user, filesystem,
+environment (including any secrets/API keys), and network access.
+
+- It is **OFF by default** (`RUN_CODE_CHECK=0`); leave it off unless you fully
+  control the input.
+- If you enable it, run it inside an **isolated sandbox**: a disposable
+  container/VM (no reuse), **no network**, **no host secrets** in the
+  environment, a non-privileged user, an ephemeral/read-only filesystem, and
+  strict **resource and time limits** (CPU, memory, processes, file
+  descriptors). Never run it directly on a developer or production host.
+
 ## How it works
 
 1. **Chain** (`codegen.build_chain`): `ChatPromptTemplate | llm | StrOutputParser`.

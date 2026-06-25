@@ -11,7 +11,7 @@ respond -> escalate) lives in ``triage.py``.
 from __future__ import annotations
 
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import llm, triage
 from .settings import get_settings
@@ -21,8 +21,8 @@ USECASE = "05-support-triage"
 
 
 class RunRequest(BaseModel):
-    message: str
-    session_id: str | None = None
+    message: str = Field(max_length=8000)
+    session_id: str | None = Field(default=None, max_length=200)
 
 
 class RunResponse(BaseModel):

@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from langchain_core.language_models.chat_models import BaseChatModel
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .agents import orchestrate
 from .llm import build_llm
@@ -25,7 +25,7 @@ USECASE = "07-multi-agent"
 
 
 class RunRequest(BaseModel):
-    topic: str
+    topic: str = Field(max_length=8000)
 
 
 class Contributions(BaseModel):

@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from langchain_core.language_models.chat_models import BaseChatModel
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import triage
 from .llm import build_llm
@@ -25,8 +25,8 @@ USECASE = "05-support-triage"
 
 
 class RunRequest(BaseModel):
-    message: str
-    session_id: str | None = None
+    message: str = Field(max_length=8000)
+    session_id: str | None = Field(default=None, max_length=200)
 
 
 class RunResponse(BaseModel):

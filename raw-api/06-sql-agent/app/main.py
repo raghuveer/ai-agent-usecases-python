@@ -17,7 +17,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import llm, sqlagent
 from .settings import get_settings
@@ -27,7 +27,7 @@ USECASE = "06-sql-agent"
 
 
 class RunRequest(BaseModel):
-    question: str
+    question: str = Field(max_length=8000)
 
 
 class RunResponse(BaseModel):

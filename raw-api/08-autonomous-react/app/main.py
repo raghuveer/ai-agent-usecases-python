@@ -10,7 +10,7 @@ run fully offline. ``POST /run`` drives the hand-written ReAct loop.
 from __future__ import annotations
 
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import llm, react
 from .settings import get_settings
@@ -20,8 +20,8 @@ USECASE = "08-autonomous-react"
 
 
 class RunRequest(BaseModel):
-    task: str
-    max_steps: int | None = None
+    task: str = Field(max_length=8000)
+    max_steps: int | None = Field(default=None, ge=1, le=12)
 
 
 class StepModel(BaseModel):

@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from langchain_core.language_models.chat_models import BaseChatModel
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .llm import build_llm
 from .recommend import load_catalog, load_profiles, recommend
@@ -26,8 +26,8 @@ USECASE = "09-recommendations"
 
 
 class RunRequest(BaseModel):
-    user_id: str
-    k: int | None = None
+    user_id: str = Field(max_length=200)
+    k: int | None = Field(default=None, ge=1, le=50)
 
 
 class Recommendation(BaseModel):

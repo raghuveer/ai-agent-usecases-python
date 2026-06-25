@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from langchain_core.language_models import BaseChatModel
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .codegen import build_codegen_graph, run_codegen
 from .llm import build_llm
@@ -24,8 +24,8 @@ USECASE = "02-code-generation"
 
 
 class RunRequest(BaseModel):
-    task: str
-    language: str | None = None
+    task: str = Field(max_length=8000)
+    language: str | None = Field(default=None, max_length=40)
 
 
 class RunResponse(BaseModel):

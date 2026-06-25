@@ -12,7 +12,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import codegen, llm
 from .settings import get_settings
@@ -22,8 +22,8 @@ USECASE = "02-code-generation"
 
 
 class RunRequest(BaseModel):
-    task: str
-    language: str | None = None
+    task: str = Field(max_length=8000)
+    language: str | None = Field(default=None, max_length=40)
 
 
 class RunResponse(BaseModel):

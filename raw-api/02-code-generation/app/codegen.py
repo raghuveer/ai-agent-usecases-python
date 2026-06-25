@@ -73,6 +73,21 @@ def smoke_check_python(code: str, timeout: int) -> bool:
     is OFF by default and only ever called when the caller opts in via the
     ``run_code_check`` setting. We run the current interpreter on a temp file
     and treat a zero exit (within the timeout) as a pass.
+
+    ⚠️ SECURITY — ARBITRARY CODE EXECUTION. ``code`` is produced by the LLM and
+    is therefore UNTRUSTED. Running it executes whatever the model emitted with
+    the full privileges of this process: it can read/write/delete files, open
+    network connections, exfiltrate environment variables and secrets, spawn
+    further processes, or exhaust resources. The ``timeout`` here is the ONLY
+    guardrail and bounds wall-clock time alone — it does not sandbox the code,
+    restrict filesystem/network access, or cap memory. For this reason the
+    feature is gated behind ``RUN_CODE_CHECK`` (OFF by default).
+
+    DO NOT enable this directly on a host you care about. If you turn it on, run
+    it inside a disposable, isolated sandbox: a throwaway container or VM with no
+    network, strict CPU/memory/time and filesystem limits, an unprivileged user,
+    and NO secrets or credentials mounted on the host. Treat any output as
+    untrusted.
     """
     tmp = Path(tempfile.mkdtemp()) / "candidate.py"
     tmp.write_text(code, encoding="utf-8")

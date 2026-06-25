@@ -11,7 +11,7 @@ text, validates with Pydantic, and retries the model once on failure.
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import extract, llm
 from .extract import ExtractionError, Invoice
@@ -22,7 +22,7 @@ USECASE = "03-data-extraction"
 
 
 class RunRequest(BaseModel):
-    text: str
+    text: str = Field(max_length=20000)
 
 
 def create_app() -> FastAPI:

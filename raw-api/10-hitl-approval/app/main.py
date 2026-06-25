@@ -18,7 +18,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import hitl, llm
 from .settings import get_settings
@@ -28,7 +28,7 @@ USECASE = "10-hitl-approval"
 
 
 class RunRequest(BaseModel):
-    request: str
+    request: str = Field(max_length=8000)
 
 
 class RunResponse(BaseModel):
@@ -38,9 +38,9 @@ class RunResponse(BaseModel):
 
 
 class ResumeRequest(BaseModel):
-    run_id: str
+    run_id: str = Field(max_length=200)
     approved: bool
-    feedback: str | None = None
+    feedback: str | None = Field(default=None, max_length=8000)
 
 
 class ResumeResponse(BaseModel):

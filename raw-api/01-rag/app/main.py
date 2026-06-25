@@ -13,7 +13,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import llm, rag
 from .settings import get_settings
@@ -23,8 +23,8 @@ USECASE = "01-rag"
 
 
 class RunRequest(BaseModel):
-    question: str
-    top_k: int | None = None
+    question: str = Field(max_length=8000)
+    top_k: int | None = Field(default=None, ge=1, le=50)
 
 
 class Source(BaseModel):

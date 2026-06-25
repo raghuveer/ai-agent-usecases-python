@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from langchain_core.language_models.chat_models import BaseChatModel
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .llm import build_llm
 from .settings import get_settings
@@ -29,7 +29,7 @@ USECASE = "06-sql-agent"
 
 
 class RunRequest(BaseModel):
-    question: str
+    question: str = Field(max_length=8000)
 
 
 class RunResponse(BaseModel):

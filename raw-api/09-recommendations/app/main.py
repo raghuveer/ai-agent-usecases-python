@@ -14,7 +14,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import llm, recommend
 from .settings import get_settings
@@ -24,8 +24,8 @@ USECASE = "09-recommendations"
 
 
 class RunRequest(BaseModel):
-    user_id: str
-    k: int | None = None
+    user_id: str = Field(max_length=200)
+    k: int | None = Field(default=None, ge=1, le=50)
 
 
 class Recommendation(BaseModel):

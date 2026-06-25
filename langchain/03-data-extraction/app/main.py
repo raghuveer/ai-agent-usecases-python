@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from langchain_core.language_models.chat_models import BaseChatModel
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .extract import ExtractionError, Invoice, extract_invoice
 from .llm import build_llm
@@ -26,7 +26,7 @@ USECASE = "03-data-extraction"
 
 
 class RunRequest(BaseModel):
-    text: str
+    text: str = Field(max_length=20000)
 
 
 @asynccontextmanager

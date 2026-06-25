@@ -11,7 +11,7 @@ run fully offline. ``POST /run`` drives the hand-coded orchestrator
 from __future__ import annotations
 
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import agents, llm
 from .settings import get_settings
@@ -21,7 +21,7 @@ USECASE = "07-multi-agent"
 
 
 class RunRequest(BaseModel):
-    topic: str
+    topic: str = Field(max_length=8000)
 
 
 class Contributions(BaseModel):
