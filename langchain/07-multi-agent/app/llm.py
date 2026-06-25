@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC7 Multi-agent orchestration (langchain). See langchain/07-multi-agent/README.md
 """LLM client factory (UC7 multi-agent, langchain approach).
 
 Returns a langchain ``ChatOpenAI`` pointed at the OpenAI-compatible gateway. The

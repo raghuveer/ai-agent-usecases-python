@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC9 Recommendations (raw-api). See raw-api/09-recommendations/README.md
 """Hand-written recommendations: deterministic ranking + LLM-written reasons.
 
 The point of this use case is the split of responsibilities:

@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC7 Multi-agent orchestration (langgraph). See langgraph/07-multi-agent/README.md
 """LLM client factory (UC7 multi-agent, langgraph approach).
 
 Uniform ``ChatOpenAI`` path pointed at the OpenAI-compatible gateway, for both

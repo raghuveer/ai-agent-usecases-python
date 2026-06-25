@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC2 Code generation (langchain). See langchain/02-code-generation/README.md
 """Integration test — hits the live local coder model via the gateway.
 
 Generates real code with the free local Qwen coder. Skipped unless

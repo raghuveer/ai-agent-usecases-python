@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC1 Q&A / RAG chatbot (langgraph). See langgraph/01-rag/README.md
 """Integration test for UC1 RAG (langgraph).
 
 Hits the live local Qwen model via the gateway and a real Chroma index built

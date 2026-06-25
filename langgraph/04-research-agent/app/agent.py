@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC4 Research agent (langgraph). See langgraph/04-research-agent/README.md
 """Research agent (langgraph approach): a bundled corpus, a deterministic
 offline ``search`` tool, and a TEXT-based ReAct loop modelled as a
 ``StateGraph`` cycle.

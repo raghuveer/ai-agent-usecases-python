@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC7 Multi-agent orchestration (langchain). See langchain/07-multi-agent/README.md
 """Integration test — drives the real langchain pipeline via the gateway.
 
 researcher (deterministic) → writer chain → reviewer chain over a bundled topic.

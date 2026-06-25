@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC9 Recommendations (langchain). See langchain/09-recommendations/README.md
 """Recommendations core (langchain): deterministic ranking + an LCEL reason chain.
 
 Responsibilities are split deliberately:

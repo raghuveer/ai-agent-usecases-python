@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC1 Q&A / RAG chatbot (langchain). See langchain/01-rag/README.md
 """FastAPI app for UC1 RAG (langchain approach).
 
 On startup it builds/loads the Chroma index and a retriever, and builds the LLM

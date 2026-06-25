@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC5 Customer support triage (langchain). See langchain/05-support-triage/README.md
 """Integration test — hits the live local Qwen via the gateway.
 
 Gated: skipped unless ``RUN_INTEGRATION=1``. Keep ``max_tokens`` small.

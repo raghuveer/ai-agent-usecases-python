@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC2 Code generation (raw-api). See raw-api/02-code-generation/README.md
 """FastAPI app for UC2 code-generation, raw-api approach.
 
 Wires an injectable LLM client on ``app.state`` so unit tests override it and run

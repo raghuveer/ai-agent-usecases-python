@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC9 Recommendations (langgraph). See langgraph/09-recommendations/README.md
 """Unit tests for UC9 recommendations (langgraph). Fake LLM, no network.
 
 Ranking is deterministic plain Python, so we assert the exact top-k for a fixture

@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC8 Autonomous ReAct (langchain). See langchain/08-autonomous-react/README.md
 """Deterministic, offline tools for the ReAct agent (langchain approach).
 
 Same two tools as the other approaches — a safe `ast`-based ``calculator`` and a

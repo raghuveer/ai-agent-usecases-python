@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC5 Customer support triage (raw-api). See raw-api/05-support-triage/README.md
 """Integration test — hits the live local model via the gateway.
 
 Classifies a real support message with the live Qwen model. Gated: runs only

@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC3 Data extraction (langchain). See langchain/03-data-extraction/README.md
 """FastAPI app for UC3 data-extraction (langchain approach).
 
 On startup it builds the LLM client and stores it on ``app.state`` so unit tests

@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — raw-api project template. See raw-api/_template/README.md
 """Application settings, loaded from environment / .env via pydantic-settings.
 
 Sensible defaults let the app import (and unit tests run) without a real key.

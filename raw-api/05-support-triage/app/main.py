@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC5 Customer support triage (raw-api). See raw-api/05-support-triage/README.md
 """FastAPI app for UC5 support-triage, raw-api approach.
 
 Wires an injectable LLM client onto ``app.state``. Unit tests override the

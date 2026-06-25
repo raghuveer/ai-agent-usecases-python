@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC3 Data extraction (langchain). See langchain/03-data-extraction/README.md
 """Structured extraction core (langchain approach).
 
 A small LCEL chain turns invoice text into a JSON string:

@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC8 Autonomous ReAct (langgraph). See langgraph/08-autonomous-react/README.md
 """FastAPI app for UC8 autonomous-react (langgraph approach).
 
 ``create_app`` accepts an injected LLM so unit tests run offline. ``POST /run``

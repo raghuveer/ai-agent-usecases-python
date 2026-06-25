@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC6 SQL / DB agent (langchain). See langchain/06-sql-agent/README.md
 """FastAPI app for UC6 sql-agent (langchain approach).
 
 On startup it builds a tiny SQLite DB from ``data/seed.sql`` and the LLM client.

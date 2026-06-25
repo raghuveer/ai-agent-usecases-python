@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC8 Autonomous ReAct (raw-api). See raw-api/08-autonomous-react/README.md
 """Unit tests for UC8 autonomous-react (raw-api) — fully mocked, no network.
 
 We script a sequence of LLM replies (a scripted ``llm_call``) so the ReAct loop

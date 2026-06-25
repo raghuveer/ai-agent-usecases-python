@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC10 Human-in-the-loop approval (raw-api). See raw-api/10-hitl-approval/README.md
 """Integration test — full /run -> /resume(approved=true) cycle vs local Qwen.
 
 Gated: runs only when RUN_INTEGRATION=1, otherwise skipped. Uses the free local

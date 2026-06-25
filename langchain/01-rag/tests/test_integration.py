@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC1 Q&A / RAG chatbot (langchain). See langchain/01-rag/README.md
 """Integration test — hits the live local Qwen via the gateway + real Chroma.
 
 Gated: skipped unless ``RUN_INTEGRATION=1``. Uses chromadb default embeddings

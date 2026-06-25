@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC6 SQL / DB agent (langgraph). See langgraph/06-sql-agent/README.md
 """Unit tests for UC6 sql-agent (langgraph). Fake LLM + fixture DB, no network.
 
 The SQL safety validator is the critical piece, so it gets the most coverage. The

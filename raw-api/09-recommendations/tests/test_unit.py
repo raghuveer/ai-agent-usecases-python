@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC9 Recommendations (raw-api). See raw-api/09-recommendations/README.md
 """Unit tests for UC9 recommendations (raw-api) — fully mocked, no network.
 
 The ranking is deterministic plain Python, so we assert the exact top-k for a

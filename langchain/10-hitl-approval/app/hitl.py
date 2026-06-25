@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC10 Human-in-the-loop approval (langchain). See langchain/10-hitl-approval/README.md
 """Human-in-the-loop approval core (langchain approach).
 
 LangChain has no first-class ``interrupt()``: a chain (LCEL pipeline) is meant to

@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC2 Code generation (langgraph). See langgraph/02-code-generation/README.md
 r"""Code generation as a langgraph StateGraph: generate -> check -> (loop|END).
 
 This is where langgraph earns its keep over a flat chain: the OPTIONAL

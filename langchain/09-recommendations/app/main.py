@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC9 Recommendations (langchain). See langchain/09-recommendations/README.md
 """FastAPI app for UC9 recommendations (langchain approach).
 
 On startup it loads the bundled catalog + profiles and builds the LLM client.

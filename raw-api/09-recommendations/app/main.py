@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC9 Recommendations (raw-api). See raw-api/09-recommendations/README.md
 """FastAPI app for UC9 recommendations, raw-api approach.
 
 Loads the bundled catalog + profiles on startup and wires an injectable LLM

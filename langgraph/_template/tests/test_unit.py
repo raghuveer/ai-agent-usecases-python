@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — langgraph project template. See langgraph/_template/README.md
 """Unit tests for the langgraph template. Mocked LLM, no network."""
 from __future__ import annotations
 

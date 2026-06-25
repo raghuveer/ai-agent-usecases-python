@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC2 Code generation (raw-api). See raw-api/02-code-generation/README.md
 """Unit tests for UC2 code-generation (raw-api) — fully mocked, no network.
 
 These tests also assert the safety contract: with the self-check flag OFF, no

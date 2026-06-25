@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC9 Recommendations (raw-api). See raw-api/09-recommendations/README.md
 """LLM client factory for the raw-api approach.
 
 We talk to the gateway with the plain ``openai`` SDK so every byte sent is

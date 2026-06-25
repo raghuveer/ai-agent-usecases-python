@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC5 Customer support triage (langgraph). See langgraph/05-support-triage/README.md
 """Configuration via pydantic-settings (UC5 support-triage).
 
 Defaults are sensible so the app imports without a real gateway key; unit tests

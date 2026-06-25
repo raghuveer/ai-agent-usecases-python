@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC2 Code generation (langchain). See langchain/02-code-generation/README.md
 """Unit tests for UC2 code-generation (langchain) — fully mocked, no network.
 
 We inject ``FakeListChatModel`` onto ``app.state`` and exercise the LCEL chain

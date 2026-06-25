@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — raw-api project template. See raw-api/_template/README.md
 """Minimal FastAPI skeleton for the raw-api approach (Phase 0 template).
 
 `GET /health` reports the approach/usecase. `POST /run` echoes the question

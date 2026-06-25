@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — langgraph project template. See langgraph/_template/README.md
 """Minimal langgraph FastAPI skeleton.
 
 A tiny single-node ``StateGraph`` that echoes the question through the LLM.

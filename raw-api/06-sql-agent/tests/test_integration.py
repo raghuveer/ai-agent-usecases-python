@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC6 SQL / DB agent (raw-api). See raw-api/06-sql-agent/README.md
 """Integration test — hits the live local Qwen coder via the gateway.
 
 Builds the real SQLite DB from the bundled seed and asks a counting question.

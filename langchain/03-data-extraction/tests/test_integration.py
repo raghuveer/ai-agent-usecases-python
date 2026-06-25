@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC3 Data extraction (langchain). See langchain/03-data-extraction/README.md
 """Integration test — hits the live local Qwen via the gateway.
 
 Extracts an Invoice from the bundled sample invoice. Gated: skipped unless

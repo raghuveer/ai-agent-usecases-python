@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC1 Q&A / RAG chatbot (raw-api). See raw-api/01-rag/README.md
 """Unit tests for UC1 RAG (raw-api) — fully mocked, no network, no index build."""
 from __future__ import annotations
 
@@ -121,6 +125,8 @@ def test_health_and_run_offline():
     assert body["sources"] == [
         {"source": "northwind-returns.md", "snippet": "full refund in 30 days"}
     ]
-    # qwen3 default model => /no_think was applied to the system message sent.
+    # The grounded system prompt reached the model. (qwen3 /no_think prefixing is
+    # covered independently by test_apply_no_think_qwen3_only; here the model comes
+    # from .env so it isn't necessarily qwen3.)
     sent = app.state.client.chat.completions.create.call_args.kwargs["messages"]
-    assert sent[0]["content"].startswith("/no_think")
+    assert "ONLY the provided context" in sent[0]["content"]

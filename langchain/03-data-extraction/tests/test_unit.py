@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC3 Data extraction (langchain). See langchain/03-data-extraction/README.md
 """Unit tests for UC3 data-extraction (langchain) — fully mocked, no network.
 
 We inject ``FakeListChatModel`` onto ``app.state`` and exercise the extraction

@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC2 Code generation (langgraph). See langgraph/02-code-generation/README.md
 """LLM client factory (UC2 code-generation).
 
 Uniform ``ChatOpenAI`` path pointed at the OpenAI-compatible gateway. Injectable

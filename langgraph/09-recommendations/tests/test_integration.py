@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC9 Recommendations (langgraph). See langgraph/09-recommendations/README.md
 """Integration test — hits the live local model via the gateway.
 
 Loads the real bundled catalog + profiles, runs the deterministic ranking node,

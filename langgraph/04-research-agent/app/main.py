@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC4 Research agent (langgraph). See langgraph/04-research-agent/README.md
 """FastAPI app for UC4 research-agent (langgraph approach).
 
 On startup it loads the bundled corpus and builds the LLM client. ``create_app``

@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC1 Q&A / RAG chatbot (langchain). See langchain/01-rag/README.md
 """Unit tests for UC1 RAG (langchain) — fully mocked, no network.
 
 We inject a fake in-memory retriever and ``FakeListChatModel`` onto

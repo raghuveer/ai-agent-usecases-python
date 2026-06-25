@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC10 Human-in-the-loop approval (langgraph). See langgraph/10-hitl-approval/README.md
 """FastAPI app for UC10 hitl-approval (langgraph approach) — the showcase.
 
 ``POST /run`` invokes the graph under a fresh ``thread_id == run_id``; the graph

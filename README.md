@@ -76,6 +76,10 @@ CI (`.github/workflows/ci.yml`) runs the **unit tests only** across all projects
 - `PLAN.md` — phased build order and final status.
 - `TRACKING.md` — feasibility matrix & per-cell build status.
 
-## License
+## License & credits
 
-TBD before public release.
+**MIT** — see [`LICENSE`](LICENSE). Copyright (c) 2026 Raghuveer Dendukuri.
+
+**Author:** Raghuveer Dendukuri · **Co-author:** Claude Code (Opus). Every source
+file carries an `SPDX-License-Identifier: MIT` header that also names its use case
+and links the relevant folder README.

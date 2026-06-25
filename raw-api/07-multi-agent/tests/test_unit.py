@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+# ai-usecases — UC7 Multi-agent orchestration (raw-api). See raw-api/07-multi-agent/README.md
 """Unit tests for UC7 multi-agent (raw-api) — fully mocked, no network.
 
 A scripted ``llm_call`` returns queued replies per (system, user) call so the
