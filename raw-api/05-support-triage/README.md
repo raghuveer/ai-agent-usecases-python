@@ -43,3 +43,5 @@ RUN_INTEGRATION=1 .venv/Scripts/python.exe -m pytest tests/test_integration.py -
 
 Copy `.env.example` to `.env` and set `LLM_GATEWAY_KEY`. The default model is the
 free local alias `qwen-local-instruct`.
+
+**Swapping models/providers:** set `LLM_BASE_URL` / `LLM_GATEWAY_KEY` / `LLM_MODEL` (and optional `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`) in `.env` — no code changes. See the root README's "Use a different model or provider" table.

@@ -25,6 +25,8 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
+from .llm import model_profile
+
 SYSTEM_PROMPT = (
     "You are an expert programmer. Generate correct, self-contained code for the "
     "user's task. Respond with exactly ONE fenced code block in the requested "
@@ -48,9 +50,7 @@ _FENCE_RE = re.compile(
 
 def _system_prompt(model: str) -> str:
     """Disable qwen3 thinking mode by prefixing /no_think."""
-    if model.startswith("qwen3"):
-        return "/no_think\n" + SYSTEM_PROMPT
-    return SYSTEM_PROMPT
+    return model_profile(model)["thinking_prefix"] + SYSTEM_PROMPT
 
 
 def build_chain(llm: BaseChatModel, model_name: str):

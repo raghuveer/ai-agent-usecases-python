@@ -32,6 +32,7 @@ from langchain_core.retrievers import BaseRetriever
 from langchain_core.runnables import RunnablePassthrough
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from .llm import model_profile
 from .settings import Settings, get_settings
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -47,9 +48,7 @@ USER_PROMPT = "Context:\n{context}\n\nQuestion: {question}\n\nAnswer:"
 
 def _system_prompt(model: str) -> str:
     """Disable qwen3 thinking mode by prefixing /no_think."""
-    if model.startswith("qwen3"):
-        return "/no_think\n" + SYSTEM_PROMPT
-    return SYSTEM_PROMPT
+    return model_profile(model)["thinking_prefix"] + SYSTEM_PROMPT
 
 
 def load_corpus(data_dir: Path | None = None) -> list[Document]:

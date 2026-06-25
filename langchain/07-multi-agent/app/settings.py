@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     llm_gateway_key: str = "replace-with-platform-virtual-key"
     # UC7: coordinating writer + reviewer reliably is beyond the free local Qwen.
     llm_model: str = "claude-haiku-4-5"
+    llm_temperature: float = 0.0  # deterministic by default
+    llm_max_tokens: int = 400  # primary generation budget (was hardcoded in build_llm)
     research_top_k: int = 4  # bullet facts the researcher gathers from the corpus
     max_revisions: int = 1  # cap on the reviewer reject → writer revise loop
 

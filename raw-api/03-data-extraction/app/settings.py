@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     llm_base_url: str = "http://localhost:8080/v1"
     llm_gateway_key: str = "replace-with-platform-virtual-key"
     llm_model: str = "claude-haiku-4-5"  # UC3: local Qwen too weak for reliable JSON; use Haiku
+    # Generation params (override via LLM_TEMPERATURE / LLM_MAX_TOKENS).
+    llm_temperature: float = 0.0
+    llm_max_tokens: int = 512  # primary generation budget for this use case
+    # Structured-output strategy: "text" (prompt for JSON, parse from the reply —
+    # portable across any chat model) or "native" (provider JSON mode, more
+    # reliable but requires provider support). Default reproduces today's behavior.
+    llm_structured_mode: str = "text"
 
 
 def get_settings() -> Settings:

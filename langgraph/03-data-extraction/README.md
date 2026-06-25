@@ -55,6 +55,26 @@ Invoice = {
 | `LLM_BASE_URL` | `http://localhost:8080/v1` | OpenAI-compatible gateway |
 | `LLM_GATEWAY_KEY` | placeholder | `Authorization: Bearer` key |
 | `LLM_MODEL` | `qwen-local-instruct` | model alias (qwen3 → `/no_think` auto-applied) |
+| `LLM_TEMPERATURE` | `0.0` | sampling temperature |
+| `LLM_MAX_TOKENS` | `512` | max generation tokens |
+| `LLM_STRUCTURED_MODE` | `text` | `text` \| `native` (see below) |
+
+**Swapping models/providers:** set `LLM_BASE_URL` / `LLM_GATEWAY_KEY` / `LLM_MODEL`
+(and optional `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`) in `.env` — no code changes.
+See the root README's "Use a different model or provider" table.
+
+## Structured-output modes
+
+`LLM_STRUCTURED_MODE` selects how the `Invoice` schema is extracted:
+
+- **`text`** (default): the prompt instructs the model to return a single JSON
+  object and the reply is parsed from text. Portable across **any** chat model;
+  reproduces this project's original behavior.
+- **`native`**: uses `llm.with_structured_output(Invoice)` (langchain's idiomatic
+  native structured output), which returns a validated object directly. More
+  reliable, but requires provider support (OpenAI JSON mode, many LiteLLM
+  routes; not all local models). The same `Invoice` schema and validate/
+  retry-once contract apply in both modes.
 
 ## Run
 

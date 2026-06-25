@@ -72,6 +72,8 @@ def create_app() -> FastAPI:
             model=settings.llm_model,
             system_prompt=hitl.DRAFT_SYSTEM_PROMPT,
             user_prompt=user_prompt,
+            temperature=settings.llm_temperature,
+            max_tokens=settings.llm_max_tokens,
         )
 
     @app.get("/health")

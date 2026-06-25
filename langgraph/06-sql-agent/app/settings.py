@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     llm_base_url: str = "http://localhost:8080/v1"
     llm_gateway_key: str = "replace-with-platform-virtual-key"
     llm_model: str = "qwen-local-coder"  # gateway alias (free local Qwen coder)
+    llm_temperature: float = 0.0
+    llm_max_tokens: int = 256
 
 
 def get_settings() -> Settings:

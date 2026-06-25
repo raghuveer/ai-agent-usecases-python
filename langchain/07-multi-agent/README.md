@@ -48,6 +48,10 @@ and returns the best `RESEARCH_TOP_K`.
 | `LLM_MODEL` | `claude-haiku-4-5` | model alias (qwen3 → `/no_think` auto-applied) |
 | `RESEARCH_TOP_K` | `4` | corpus facts the researcher gathers |
 | `MAX_REVISIONS` | `1` | reviewer reject → writer revise cap |
+| `LLM_TEMPERATURE` | `0.0` | sampling temperature (optional) |
+| `LLM_MAX_TOKENS` | `400` | max generated tokens (optional) |
+
+**Swapping models/providers:** set `LLM_BASE_URL` / `LLM_GATEWAY_KEY` / `LLM_MODEL` (and optional `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`) in `.env` — no code changes. See the root README's "Use a different model or provider" table.
 
 ## Run
 

@@ -33,23 +33,36 @@ def create_app() -> FastAPI:
     app.state.settings = settings
     app.state.client = llm.build_client(settings)
 
-    def _llm_call(system_prompt: str, user_prompt: str) -> str:
-        return llm.chat(
-            app.state.client,
-            model=settings.llm_model,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-        )
-
     @app.get("/health")
     def health() -> dict:
         return {"status": "ok", "approach": APPROACH, "usecase": USECASE}
 
     @app.post("/run")
     def run(req: RunRequest) -> dict:
+        # Read settings/client off app.state so tests can override either.
+        cfg = app.state.settings
+        # "native" mode asks the provider for guaranteed JSON (OpenAI-compatible
+        # JSON mode); "text" (default) prompts for JSON and parses it from the
+        # reply — byte-identical to before, no response_format sent.
+        native = cfg.llm_structured_mode == "native"
+        response_format = {"type": "json_object"} if native else None
+
+        def _llm_call(system_prompt: str, user_prompt: str) -> str:
+            return llm.chat(
+                app.state.client,
+                model=cfg.llm_model,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=cfg.llm_temperature,
+                max_tokens=cfg.llm_max_tokens,
+                response_format=response_format,
+            )
+
         try:
             invoice: Invoice = extract.extract_invoice(
-                req.text, llm_call=_llm_call
+                req.text,
+                llm_call=_llm_call,
+                mode=cfg.llm_structured_mode,
             )
         except ExtractionError as exc:
             raise HTTPException(

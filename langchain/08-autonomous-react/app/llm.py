@@ -22,15 +22,24 @@ def build_llm(settings: Settings | None = None, **kwargs) -> BaseChatModel:
         base_url=settings.llm_base_url,
         api_key=settings.llm_gateway_key,
         model=settings.llm_model,
-        temperature=0,
-        max_tokens=kwargs.pop("max_tokens", 384),
+        temperature=kwargs.pop("temperature", settings.llm_temperature),
+        max_tokens=kwargs.pop("max_tokens", settings.llm_max_tokens),
         **kwargs,
     )
+
+
+def model_profile(model: str) -> dict:
+    """Per-model-family quirks/capabilities, keyed by id prefix.
+
+    Single place model-family quirks live — extend here to support a new model
+    family and nothing else changes.
+    """
+    if model.lower().startswith("qwen3"):
+        return {"thinking_prefix": "/no_think\n"}
+    return {"thinking_prefix": ""}
 
 
 def system_prefix(text: str, settings: Settings | None = None) -> str:
     """Prepend ``/no_think`` for qwen3 models to disable thinking mode."""
     settings = settings or get_settings()
-    if settings.llm_model.startswith("qwen3"):
-        return "/no_think\n" + text
-    return text
+    return model_profile(settings.llm_model)["thinking_prefix"] + text

@@ -45,9 +45,13 @@ generate --> check --(fail & under cap)--> generate
 | `LLM_BASE_URL` | `http://localhost:8080/v1` | OpenAI-compatible gateway |
 | `LLM_GATEWAY_KEY` | placeholder | `Authorization: Bearer` key |
 | `LLM_MODEL` | `qwen-local-coder` | model alias (free local Qwen coder) |
+| `LLM_TEMPERATURE` | `0.0` | sampling temperature |
+| `LLM_MAX_TOKENS` | `1024` | max generation tokens |
 | `DEFAULT_LANGUAGE` | `python` | language used when the request omits one |
 | `RUN_CODE_CHECK` | `0` | `1` smoke-runs generated python (subprocess) |
 | `CODE_CHECK_TIMEOUT` | `10` | seconds before the smoke run is killed |
+
+**Swapping models/providers:** set `LLM_BASE_URL` / `LLM_GATEWAY_KEY` / `LLM_MODEL` (and optional `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`) in `.env` — no code changes. See the root README's "Use a different model or provider" table.
 
 ## Run
 

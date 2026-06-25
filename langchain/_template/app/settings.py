@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     llm_base_url: str = "http://localhost:8080/v1"
     llm_gateway_key: str = "replace-with-platform-virtual-key"
     llm_model: str = "qwen3:1.7b"
+    llm_temperature: float = 0.0  # deterministic by default
+    llm_max_tokens: int = 256  # primary generation budget (was hardcoded at call site)
 
     # Carried in the template so use cases that copy it have the same contract.
     rag_top_k: int = 3

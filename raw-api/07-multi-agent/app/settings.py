@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     # UC7: the orchestrator → researcher → writer → reviewer chain needs reliable
     # role-following the free local Qwen can't give; use Haiku.
     llm_model: str = "claude-haiku-4-5"
+    # Generation params (override via LLM_TEMPERATURE / LLM_MAX_TOKENS).
+    llm_temperature: float = 0.0
+    llm_max_tokens: int = 400  # primary generation budget for this use case
     research_top_k: int = 4  # bullet facts the researcher gathers from the corpus
     max_revisions: int = 1  # cap on the reviewer reject → writer revise loop
 

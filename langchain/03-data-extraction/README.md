@@ -51,6 +51,20 @@ Invoice = {
 | `LLM_BASE_URL` | `http://localhost:8080/v1` | OpenAI-compatible gateway |
 | `LLM_GATEWAY_KEY` | placeholder | `Authorization: Bearer` key |
 | `LLM_MODEL` | `qwen-local-instruct` | model alias (qwen3 → `/no_think` auto-applied) |
+| `LLM_TEMPERATURE` | `0.0` | sampling temperature (optional) |
+| `LLM_MAX_TOKENS` | `512` | max generated tokens (optional) |
+| `LLM_STRUCTURED_MODE` | `text` | `text` (parse JSON from reply) or `native` (`with_structured_output`) |
+
+**Swapping models/providers:** set `LLM_BASE_URL` / `LLM_GATEWAY_KEY` / `LLM_MODEL` (and optional `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`) in `.env` — no code changes. See the root README's "Use a different model or provider" table.
+
+## Structured-output modes
+
+UC3 supports two extraction strategies via `LLM_STRUCTURED_MODE`:
+
+- **`text`** (default): the prompt instructs the model to return a single JSON object, which is then parsed out of the text reply and validated against the `Invoice` schema. This is **portable across any chat model** (including local Qwen) and reproduces the original behavior exactly.
+- **`native`**: uses langchain's `llm.with_structured_output(Invoice)`, which asks the provider for schema-constrained output and returns a validated object directly (no manual parsing). This is **more reliable but requires provider support** — OpenAI JSON mode, many LiteLLM routes, and similar; not all local models support it.
+
+Both paths keep the same `Invoice` schema and the validate / retry-once contract. The default is `text`.
 
 ## Run
 

@@ -45,6 +45,11 @@ all hand-written so you can see exactly what is sent and what runs.
 | `LLM_BASE_URL` | `http://localhost:8080/v1` | OpenAI-compatible gateway |
 | `LLM_GATEWAY_KEY` | placeholder | `Authorization: Bearer` key |
 | `LLM_MODEL` | `qwen-local-coder` | model alias (free local Qwen coder) |
+| `LLM_TEMPERATURE` | `0.0` | sampling temperature (0 = deterministic) |
+| `LLM_MAX_TOKENS` | per use case | max tokens for the primary generation |
+
+**Swapping models/providers:** set `LLM_BASE_URL` / `LLM_GATEWAY_KEY` / `LLM_MODEL` (and optional `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`) in `.env` — no code changes. See the root README's "Use a different model or provider" table.
+
 
 ## Run
 

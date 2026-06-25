@@ -38,6 +38,10 @@ item.
 | `LLM_GATEWAY_KEY` | placeholder | `Authorization: Bearer` key |
 | `LLM_MODEL` | `qwen-local-instruct` | model alias (qwen3 → `/no_think` auto-applied) |
 | `REC_TOP_K` | `3` | default number of recommendations |
+| `LLM_TEMPERATURE` | `0.0` | sampling temperature (optional) |
+| `LLM_MAX_TOKENS` | `128` | max generated tokens (optional) |
+
+**Swapping models/providers:** set `LLM_BASE_URL` / `LLM_GATEWAY_KEY` / `LLM_MODEL` (and optional `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`) in `.env` — no code changes. See the root README's "Use a different model or provider" table.
 
 ## Run
 

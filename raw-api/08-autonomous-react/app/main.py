@@ -50,6 +50,8 @@ def create_app() -> FastAPI:
             app.state.client,
             model=settings.llm_model,
             messages=messages,
+            temperature=settings.llm_temperature,
+            max_tokens=settings.llm_max_tokens,
             stop=["Observation:"],
         )
 

@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     llm_base_url: str = "http://localhost:8080/v1"
     llm_gateway_key: str = "replace-with-platform-virtual-key"
     llm_model: str = "qwen-local-instruct"  # gateway alias (free local Qwen)
+    llm_temperature: float = 0.0  # deterministic by default
+    llm_max_tokens: int = 512  # primary generation budget (was hardcoded at call site)
 
     rag_top_k: int = 3
     chroma_dir: str = ".chroma"

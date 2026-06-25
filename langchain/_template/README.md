@@ -22,6 +22,10 @@ See `.env.example`:
 | `LLM_MODEL` | model id; `qwen3:*` triggers `/no_think` system-prompt handling |
 | `RAG_TOP_K` | retrieval depth (carried for use cases that copy this) |
 | `CHROMA_DIR` | vector store dir (carried for use cases that copy this) |
+| `LLM_TEMPERATURE` | sampling temperature (optional, default `0.0`) |
+| `LLM_MAX_TOKENS` | max generated tokens (optional, default `256`) |
+
+**Swapping models/providers:** set `LLM_BASE_URL` / `LLM_GATEWAY_KEY` / `LLM_MODEL` (and optional `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`) in `.env` — no code changes. See the root README's "Use a different model or provider" table.
 
 ## Run
 

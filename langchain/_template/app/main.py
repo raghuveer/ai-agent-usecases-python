@@ -20,7 +20,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
 
-from .llm import build_llm
+from .llm import build_llm, model_profile
 from .settings import get_settings
 
 APPROACH = "langchain"
@@ -45,9 +45,7 @@ class RunResponse(BaseModel):
 def _system_prompt(model: str) -> str:
     """Base system prompt, disabling qwen3 thinking when relevant."""
     base = "You are a helpful assistant. Answer concisely."
-    if model.startswith("qwen3"):
-        return "/no_think\n" + base
-    return base
+    return model_profile(model)["thinking_prefix"] + base
 
 
 @asynccontextmanager

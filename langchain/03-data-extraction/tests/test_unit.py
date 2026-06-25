@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
+from langchain_core.runnables import RunnableLambda
 
 from app import extract
 from app.extract import (
@@ -93,6 +94,77 @@ def test_extract_invoice_raises_after_retry_still_invalid():
     llm = FakeListChatModel(responses=[INVALID_JSON, INVALID_JSON])
     with pytest.raises(ExtractionError):
         extract_invoice("raw invoice text", llm, "qwen-local-instruct")
+
+
+def test_extract_invoice_text_mode_explicit():
+    # Passing structured_mode="text" must behave like the default text path.
+    llm = FakeListChatModel(responses=[VALID_JSON])
+    inv = extract_invoice(
+        "raw invoice text", llm, "qwen-local-instruct", structured_mode="text"
+    )
+    assert isinstance(inv, Invoice)
+    assert inv.invoice_number == "INV-2045"
+
+
+# --------------------------------------------------------------------------- #
+# native structured-output mode (mocked with_structured_output -> Invoice)
+# --------------------------------------------------------------------------- #
+class FakeStructuredModel(FakeListChatModel):
+    """Fake whose ``with_structured_output`` returns a Runnable yielding objects."""
+
+    structured_returns: list = []
+
+    def with_structured_output(self, schema, **kwargs):  # noqa: D401, ARG002
+        outputs = list(self.structured_returns)
+
+        def _emit(_inputs):
+            value = outputs.pop(0)
+            if isinstance(value, Exception):
+                raise value
+            return value
+
+        return RunnableLambda(_emit)
+
+
+def _native_model(returns: list) -> FakeStructuredModel:
+    m = FakeStructuredModel(responses=["unused"])
+    m.structured_returns = returns
+    return m
+
+
+VALID_INVOICE = Invoice(
+    invoice_number="INV-2045",
+    vendor="Northwind Robotics",
+    date="2026-05-14",
+    total=1903.22,
+    line_items=[{"description": "ServoMax 9000 actuator", "amount": 1250.00}],
+)
+
+
+def test_extract_invoice_native_first_try():
+    llm = _native_model([VALID_INVOICE])
+    inv = extract_invoice(
+        "raw invoice text", llm, "claude-haiku-4-5", structured_mode="native"
+    )
+    assert isinstance(inv, Invoice)
+    assert inv.invoice_number == "INV-2045"
+    assert inv.total == 1903.22
+
+
+def test_extract_invoice_native_retries_once_then_succeeds():
+    llm = _native_model([ValueError("bad output"), VALID_INVOICE])
+    inv = extract_invoice(
+        "raw invoice text", llm, "claude-haiku-4-5", structured_mode="native"
+    )
+    assert inv.total == 1903.22
+
+
+def test_extract_invoice_native_raises_after_retry():
+    llm = _native_model([ValueError("bad"), ValueError("still bad")])
+    with pytest.raises(ExtractionError):
+        extract_invoice(
+            "raw invoice text", llm, "claude-haiku-4-5", structured_mode="native"
+        )
 
 
 # --------------------------------------------------------------------------- #

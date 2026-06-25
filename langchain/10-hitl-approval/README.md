@@ -39,6 +39,10 @@ at the node. Here the "pause" is application-level bookkeeping the developer own
 | `LLM_BASE_URL` | `http://localhost:8080/v1` | OpenAI-compatible gateway |
 | `LLM_GATEWAY_KEY` | placeholder | `Authorization: Bearer` key |
 | `LLM_MODEL` | `qwen-local-instruct` | model alias (qwen3 → `/no_think` auto-applied) |
+| `LLM_TEMPERATURE` | `0.0` | sampling temperature (optional) |
+| `LLM_MAX_TOKENS` | `256` | max generated tokens (optional) |
+
+**Swapping models/providers:** set `LLM_BASE_URL` / `LLM_GATEWAY_KEY` / `LLM_MODEL` (and optional `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`) in `.env` — no code changes. See the root README's "Use a different model or provider" table.
 
 ## Run
 

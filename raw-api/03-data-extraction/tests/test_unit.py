@@ -124,6 +124,61 @@ def test_system_prompt_includes_schema():
 
 
 # --------------------------------------------------------------------------- #
+# native structured-output mode (offline)
+# --------------------------------------------------------------------------- #
+def test_parse_and_validate_native_parses_clean_json():
+    # Native JSON mode returns a clean object: parsed directly, no brace-hunting.
+    inv = extract.parse_and_validate_native(VALID_JSON)
+    assert inv.invoice_number == "INV-2045"
+    assert inv.total == 1903.22
+
+
+def test_extract_invoice_native_mode_valid_first_try():
+    # A native client returns clean JSON; one call, no retry, no text parsing.
+    llm = RecordingLLM([VALID_JSON])
+    inv = extract_invoice("raw invoice text", llm_call=llm, mode="native")
+    assert inv.invoice_number == "INV-2045"
+    assert inv.total == 1903.22
+    assert len(llm.calls) == 1
+
+
+def test_extract_invoice_native_mode_retries_once():
+    llm = RecordingLLM([INVALID_JSON, VALID_JSON])
+    inv = extract_invoice("raw invoice text", llm_call=llm, mode="native")
+    assert inv.total == 1903.22
+    assert len(llm.calls) == 2
+    assert "could not be validated" in llm.calls[1][1]
+
+
+def test_run_native_mode_passes_json_response_format():
+    app = create_app()
+    app.state.settings = Settings(llm_structured_mode="native")
+    app.state.client = _fake_openai_client(VALID_JSON)
+
+    client = TestClient(app)
+    r = client.post("/run", json={"text": "some invoice text"})
+    assert r.status_code == 200
+    assert r.json()["invoice_number"] == "INV-2045"
+
+    # Native mode must request OpenAI-compatible JSON mode from the provider.
+    sent = app.state.client.chat.completions.create.call_args.kwargs
+    assert sent["response_format"] == {"type": "json_object"}
+
+
+def test_run_text_mode_omits_response_format():
+    app = create_app()
+    app.state.settings = Settings()  # default mode == "text"
+    app.state.client = _fake_openai_client(VALID_JSON)
+
+    client = TestClient(app)
+    r = client.post("/run", json={"text": "some invoice text"})
+    assert r.status_code == 200
+    # Text mode stays byte-identical to before: no response_format sent.
+    sent = app.state.client.chat.completions.create.call_args.kwargs
+    assert "response_format" not in sent
+
+
+# --------------------------------------------------------------------------- #
 # HTTP level (mocked openai client, no network)
 # --------------------------------------------------------------------------- #
 def test_health_and_run_offline():

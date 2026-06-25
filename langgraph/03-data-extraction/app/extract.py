@@ -118,8 +118,17 @@ class ExtractState(TypedDict):
 
 
 def build_extract_graph(llm: BaseChatModel, settings: Settings | None = None):
-    """Compile the extract -> validate -> (retry|END) graph. LLM is injected."""
+    """Compile the extract -> validate -> (retry|END) graph. LLM is injected.
+
+    Two structured-output modes (``settings.llm_structured_mode``):
+      - ``text`` (default): prompt instructs JSON, the reply is parsed from text.
+      - ``native``: ``llm.with_structured_output(Invoice)`` returns a validated
+        ``Invoice`` directly; we serialize it back to JSON so the unchanged
+        ``validate`` node and the retry-once contract still apply uniformly.
+    """
     settings = settings or get_settings()
+    native = settings.llm_structured_mode == "native"
+    structured_llm = llm.with_structured_output(Invoice) if native else None
 
     def extract(state: ExtractState) -> dict:
         feedback = ""
@@ -139,8 +148,19 @@ def build_extract_graph(llm: BaseChatModel, settings: Settings | None = None):
                 )
             ),
         ]
+        attempts = state.get("attempts", 0) + 1
+        if native:
+            # Native structured output returns a validated Invoice (or raises).
+            # Serialize to JSON so `validate` parses it the same way as text mode.
+            try:
+                invoice: Invoice = structured_llm.invoke(messages)
+                raw = invoice.model_dump_json()
+            except Exception as err:  # surface as a validation error -> retry
+                raw = ""
+                return {"raw": raw, "error": str(err), "attempts": attempts}
+            return {"raw": raw, "attempts": attempts}
         result = llm.invoke(messages)
-        return {"raw": result.content, "attempts": state.get("attempts", 0) + 1}
+        return {"raw": result.content, "attempts": attempts}
 
     def validate(state: ExtractState) -> dict:
         try:

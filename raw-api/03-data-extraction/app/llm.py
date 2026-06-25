@@ -23,11 +23,23 @@ def build_client(settings: Settings) -> OpenAI:
     return OpenAI(base_url=settings.llm_base_url, api_key=settings.llm_gateway_key)
 
 
+def model_profile(model: str) -> dict:
+    """Per-model-family quirks/capabilities, keyed by id prefix.
+
+    The single place model-family quirks live. Extend here to support a new
+    model family (e.g. a different thinking-mode toggle) -- nothing else changes.
+    """
+    if model.lower().startswith("qwen3"):
+        return {"thinking_prefix": "/no_think\n"}
+    return {"thinking_prefix": ""}
+
+
 def apply_no_think(model: str, system_prompt: str) -> str:
-    """Prepend ``/no_think`` for qwen3 models to disable thinking mode."""
-    if model.startswith("qwen3"):
-        return "/no_think\n" + system_prompt
-    return system_prompt
+    """Prepend the model's thinking-mode prefix (e.g. ``/no_think`` for qwen3).
+
+    Thin wrapper over :func:`model_profile` so quirks stay in one place.
+    """
+    return model_profile(model)["thinking_prefix"] + system_prompt
 
 
 def chat(
@@ -38,10 +50,16 @@ def chat(
     user_prompt: str,
     max_tokens: int = 512,
     temperature: float = 0.0,
+    response_format: dict | None = None,
 ) -> str:
-    """Single chat call. Returns the assistant message text (stripped)."""
+    """Single chat call. Returns the assistant message text (stripped).
+
+    ``response_format`` is the OpenAI-compatible structured-output knob (e.g.
+    ``{"type": "json_object"}`` for native JSON mode). It is only sent to the
+    API when provided, so the default call stays byte-identical to before.
+    """
     system_prompt = apply_no_think(model, system_prompt)
-    resp = client.chat.completions.create(
+    kwargs: dict = dict(
         model=model,
         messages=[
             {"role": "system", "content": system_prompt},
@@ -50,4 +68,7 @@ def chat(
         max_tokens=max_tokens,
         temperature=temperature,
     )
+    if response_format is not None:
+        kwargs["response_format"] = response_format
+    resp = client.chat.completions.create(**kwargs)
     return (resp.choices[0].message.content or "").strip()

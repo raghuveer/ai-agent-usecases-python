@@ -54,7 +54,8 @@ def create_app() -> FastAPI:
             model=settings.llm_model,
             system_prompt="You are a terse echo assistant. Repeat the user's message verbatim.",
             user_prompt=req.question,
-            max_tokens=128,
+            temperature=settings.llm_temperature,
+            max_tokens=settings.llm_max_tokens,
         )
         return RunResponse(answer=answer, sources=[])
 

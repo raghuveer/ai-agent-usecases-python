@@ -30,6 +30,8 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
 
+from .llm import model_profile
+
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 SYSTEM_PROMPT = (
@@ -69,9 +71,7 @@ class Scored:
 
 def _system_prompt(model: str) -> str:
     """Disable qwen3 thinking mode by prefixing /no_think."""
-    if model.startswith("qwen3"):
-        return "/no_think\n" + SYSTEM_PROMPT
-    return SYSTEM_PROMPT
+    return model_profile(model)["thinking_prefix"] + SYSTEM_PROMPT
 
 
 # --------------------------------------------------------------------------- #

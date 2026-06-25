@@ -39,6 +39,10 @@ product/return/warranty/support docs), built the **langchain** way: a
 | `LLM_MODEL` | `qwen3:1.7b` | model id; `qwen3:*` → `/no_think` system prompt |
 | `RAG_TOP_K` | `3` | chunks retrieved per query |
 | `CHROMA_DIR` | `.chroma` | persistent vector-store directory |
+| `LLM_TEMPERATURE` | `0.0` | sampling temperature (optional) |
+| `LLM_MAX_TOKENS` | `512` | max generated tokens (optional) |
+
+**Swapping models/providers:** set `LLM_BASE_URL` / `LLM_GATEWAY_KEY` / `LLM_MODEL` (and optional `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`) in `.env` — no code changes. See the root README's "Use a different model or provider" table.
 
 ## Run
 

@@ -41,6 +41,26 @@ Every example speaks **OpenAI-compatible HTTP** to a gateway — no provider is 
 
 Copy `.env.example` → `.env` (gitignored) and fill in your key. The `.env` is **never committed**; only `.env.example` is.
 
+## Use a different model or provider
+
+Nothing is hardcoded to a provider — every project speaks **OpenAI-compatible HTTP** and reads its model/endpoint from env. To switch, edit `.env` only — **no code changes**:
+
+| To use… | `LLM_BASE_URL` | `LLM_MODEL` | Notes |
+|---|---|---|---|
+| Bundled gateway (default) | `http://localhost:8080/v1` | `qwen-local-instruct` · `claude-haiku-4-5` | virtual key in `LLM_GATEWAY_KEY` |
+| OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` | `LLM_GATEWAY_KEY` = your OpenAI key |
+| Ollama (direct, local) | `http://localhost:11434/v1` | `qwen2.5:7b-instruct` | any non-empty key works |
+| Together · Groq · OpenRouter · Azure OpenAI | their `/v1` URL | their model id | all OpenAI-compatible |
+| Anthropic · Bedrock · Vertex | a LiteLLM proxy `/v1` | the proxy's alias | LiteLLM normalises these onto the OpenAI surface |
+
+**Tuning knobs** (also env, also no code change): `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`.
+
+Two caveats that are about the *model*, not the code:
+- **Capability ≠ code:** small local models can't reliably do strict-JSON extraction or multi-step ReAct — that's why use cases 3/4/7/8 default to a stronger model. Point them at a capable model and they work as-is; point them at a weak one and the code is unchanged but quality drops.
+- **Model quirks live in one place** — `model_profile()` in each project's `app/llm.py` (e.g. disabling qwen3's "thinking" mode). Add a new model family there in a single spot.
+
+> **Structured-output modes (UC3 prototype):** `03-data-extraction` also honours `LLM_STRUCTURED_MODE=text|native` — `text` is the portable prompt-and-parse path; `native` uses the provider's JSON / structured-output feature for higher reliability where available. See that project's README.
+
 ## Quick start (any project)
 
 Each project is independent and uses [`uv`](https://docs.astral.sh/uv/):

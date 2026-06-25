@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     llm_base_url: str = "http://localhost:8080/v1"
     llm_gateway_key: str = "replace-with-platform-virtual-key"
     llm_model: str = "claude-haiku-4-5"  # UC3: local Qwen too weak for reliable JSON; use Haiku
+    llm_temperature: float = 0.0  # deterministic by default
+    llm_max_tokens: int = 512  # primary generation budget (was hardcoded at call site)
+    # Structured-output strategy: "text" (prompt JSON + parse, portable default)
+    # or "native" (llm.with_structured_output; needs provider support).
+    llm_structured_mode: str = "text"
 
 
 def get_settings() -> Settings:

@@ -22,6 +22,10 @@ standard HTTP surface.
 | `LLM_BASE_URL` | `http://localhost:8080/v1` | OpenAI-compatible gateway |
 | `LLM_GATEWAY_KEY` | placeholder | `Authorization: Bearer <key>` |
 | `LLM_MODEL` | `qwen3:1.7b` | model id resolved from env |
+| `LLM_TEMPERATURE` | `0.0` | sampling temperature |
+| `LLM_MAX_TOKENS` | `512` | max generation tokens |
+
+**Swapping models/providers:** set `LLM_BASE_URL` / `LLM_GATEWAY_KEY` / `LLM_MODEL` (and optional `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`) in `.env` — no code changes. See the root README's "Use a different model or provider" table.
 
 ## Run
 

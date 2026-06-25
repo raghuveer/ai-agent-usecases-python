@@ -44,6 +44,10 @@ fenced-block extraction and an optional safety check around it.
 | `DEFAULT_LANGUAGE` | `python` | language used when the request omits one |
 | `RUN_CODE_CHECK` | `0` | `1` smoke-runs generated python (subprocess) |
 | `CODE_CHECK_TIMEOUT` | `10` | seconds before the smoke run is killed |
+| `LLM_TEMPERATURE` | `0.0` | sampling temperature (optional) |
+| `LLM_MAX_TOKENS` | `1024` | max generated tokens (optional) |
+
+**Swapping models/providers:** set `LLM_BASE_URL` / `LLM_GATEWAY_KEY` / `LLM_MODEL` (and optional `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`) in `.env` — no code changes. See the root README's "Use a different model or provider" table.
 
 ## Run
 

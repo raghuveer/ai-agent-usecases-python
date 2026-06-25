@@ -66,7 +66,11 @@ Action Input: <single-line input>
 | `LLM_BASE_URL` | `http://localhost:8080/v1` | OpenAI-compatible gateway |
 | `LLM_GATEWAY_KEY` | placeholder | `Authorization: Bearer` key |
 | `LLM_MODEL` | `claude-haiku-4-5` | model alias (qwen3 → `/no_think` auto-applied) |
+| `LLM_TEMPERATURE` | `0.0` | sampling temperature |
+| `LLM_MAX_TOKENS` | `384` | max generation tokens |
 | `MAX_STEPS` | `6` | ReAct loop iteration cap |
+
+**Swapping models/providers:** set `LLM_BASE_URL` / `LLM_GATEWAY_KEY` / `LLM_MODEL` (and optional `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`) in `.env` — no code changes. See the root README's "Use a different model or provider" table.
 
 ## Run
 

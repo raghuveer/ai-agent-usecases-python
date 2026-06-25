@@ -50,6 +50,29 @@ Invoice = {
 | `LLM_BASE_URL` | `http://localhost:8080/v1` | OpenAI-compatible gateway |
 | `LLM_GATEWAY_KEY` | placeholder | `Authorization: Bearer` key |
 | `LLM_MODEL` | `qwen-local-instruct` | model alias (qwen3 → `/no_think` auto-applied) |
+| `LLM_TEMPERATURE` | `0.0` | sampling temperature (0 = deterministic) |
+| `LLM_MAX_TOKENS` | per use case | max tokens for the primary generation |
+| `LLM_STRUCTURED_MODE` | `text` | `text` (parse JSON from reply) or `native` (provider JSON mode) |
+
+**Swapping models/providers:** set `LLM_BASE_URL` / `LLM_GATEWAY_KEY` / `LLM_MODEL` (and optional `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`) in `.env` — no code changes. See the root README's "Use a different model or provider" table.
+
+## Structured-output modes
+
+`LLM_STRUCTURED_MODE` selects how the JSON object is obtained. Both modes use the
+same `Invoice` schema and the same validate + retry-once contract; only the
+parsing path differs.
+
+- **`text`** (default): the system prompt instructs the model to return JSON, and
+  the code pulls the JSON object out of the reply (tolerating prose/markdown
+  fences). Portable across **any** chat model — this is what the integration test
+  exercises.
+- **`native`**: passes `response_format={"type": "json_object"}` (OpenAI-compatible
+  JSON mode) so the provider guarantees a JSON object, which is then `json.loads`-d
+  directly. More reliable, but requires provider support — OpenAI JSON mode, many
+  LiteLLM routes, and Anthropic via the gateway support it; **not all local models
+  do**. Switch with `LLM_STRUCTURED_MODE=native` in `.env`; the default stays
+  `text`.
+
 
 ## Run
 

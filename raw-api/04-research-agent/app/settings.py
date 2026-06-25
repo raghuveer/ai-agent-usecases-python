@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     # the Action/Action Input protocol and used outside knowledge), so per the
     # build spec's fallback rule this use case switches to claude-haiku-4-5.
     llm_model: str = "claude-haiku-4-5"  # gateway alias (budget Anthropic)
+    # Generation params (override via LLM_TEMPERATURE / LLM_MAX_TOKENS).
+    llm_temperature: float = 0.0
+    llm_max_tokens: int = 512  # primary generation budget for this use case
     agent_max_steps: int = 6
     agent_top_k: int = 3
 

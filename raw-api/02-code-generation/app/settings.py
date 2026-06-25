@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     llm_base_url: str = "http://localhost:8080/v1"
     llm_gateway_key: str = "replace-with-platform-virtual-key"
     llm_model: str = "qwen-local-coder"  # gateway alias (free local Qwen coder)
+    # Generation params (override via LLM_TEMPERATURE / LLM_MAX_TOKENS).
+    llm_temperature: float = 0.0
+    llm_max_tokens: int = 1024  # primary generation budget for this use case
     default_language: str = "python"
     # When 1, the OPTIONAL self-check executes generated python in a subprocess.
     # Off by default so /run never runs untrusted code unless explicitly enabled.

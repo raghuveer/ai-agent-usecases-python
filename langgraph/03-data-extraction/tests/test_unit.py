@@ -126,3 +126,48 @@ def test_run_returns_422_when_invalid_after_retry():
     resp = client.post("/run", json={"text": "bad invoice"})
     assert resp.status_code == 422
     assert resp.json()["detail"]["valid"] is False
+
+
+# --------------------------------------------------------------------------- #
+# Structured-output modes (text default + native) — both offline/mocked
+# --------------------------------------------------------------------------- #
+from app.settings import Settings  # noqa: E402
+
+
+def test_text_mode_is_default_and_parses_from_reply():
+    # Default settings => text mode => parse JSON out of the model's text reply.
+    settings = Settings()
+    assert settings.llm_structured_mode == "text"
+    llm = FakeListChatModel(responses=[VALID_JSON])
+    inv = extract_invoice("raw invoice text", llm, settings)
+    assert isinstance(inv, Invoice)
+    assert inv.invoice_number == "INV-2045"
+    assert inv.total == 1903.22
+
+
+class _NativeFakeLLM(FakeListChatModel):
+    """Fake chat model whose ``with_structured_output`` returns an Invoice.
+
+    Mirrors langchain's native structured-output contract: the wrapped runnable
+    is invoked with messages and yields a validated pydantic object directly.
+    """
+
+    def with_structured_output(self, schema, **kwargs):  # noqa: ARG002
+        invoice = parse_and_validate(VALID_JSON)
+
+        class _Structured:
+            def invoke(self, _messages):
+                return invoice
+
+        return _Structured()
+
+
+def test_native_mode_uses_with_structured_output():
+    settings = Settings(llm_structured_mode="native")
+    # Text `responses` are unused in native mode (with_structured_output wins).
+    llm = _NativeFakeLLM(responses=["ignored"])
+    inv = extract_invoice("raw invoice text", llm, settings)
+    assert isinstance(inv, Invoice)
+    assert inv.invoice_number == "INV-2045"
+    assert inv.total == 1903.22
+    assert len(inv.line_items) == 2

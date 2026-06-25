@@ -29,7 +29,7 @@ def test_extract_invoice_against_local_qwen():
     from app.settings import get_settings
 
     settings = get_settings()
-    llm = build_llm(settings)  # build_llm already sets max_tokens=512
+    llm = build_llm(settings)  # max_tokens from settings.llm_max_tokens (default 512)
 
     text = (DATA_DIR / "sample-invoice.txt").read_text(encoding="utf-8")
     invoice = extract_invoice(text, llm, settings)

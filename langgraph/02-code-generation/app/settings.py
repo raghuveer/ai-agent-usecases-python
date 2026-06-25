@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     llm_base_url: str = "http://localhost:8080/v1"
     llm_gateway_key: str = "replace-with-platform-virtual-key"
     llm_model: str = "qwen-local-coder"  # gateway alias (free local Qwen coder)
+    llm_temperature: float = 0.0
+    llm_max_tokens: int = 1024
 
     default_language: str = "python"
     # When 1, the OPTIONAL self-check executes generated python in a subprocess.

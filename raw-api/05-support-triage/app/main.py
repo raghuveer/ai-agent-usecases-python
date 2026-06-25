@@ -41,22 +41,26 @@ def create_app() -> FastAPI:
     app.state.client = llm.build_client(settings)
 
     def _classify_call(system_prompt: str, user_prompt: str) -> str:
-        # Deterministic, short JSON classification.
+        # Deterministic, short JSON classification. Keep the small explicit
+        # 64-token budget (the global default is for the primary reply below).
         return llm.chat(
             app.state.client,
             model=settings.llm_model,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
+            temperature=settings.llm_temperature,
             max_tokens=64,
         )
 
     def _respond_call(system_prompt: str, user_prompt: str) -> str:
+        # Primary generation: customer-facing reply.
         return llm.chat(
             app.state.client,
             model=settings.llm_model,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            max_tokens=384,
+            temperature=settings.llm_temperature,
+            max_tokens=settings.llm_max_tokens,
         )
 
     @app.get("/health")

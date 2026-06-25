@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     llm_gateway_key: str = "replace-with-platform-virtual-key"
     # UC8: the two-tool ReAct chain is too unreliable on local Qwen; use Haiku.
     llm_model: str = "claude-haiku-4-5"
+    # Generation params (override via LLM_TEMPERATURE / LLM_MAX_TOKENS).
+    llm_temperature: float = 0.0
+    llm_max_tokens: int = 384  # primary generation budget for this use case
     max_steps: int = 6  # default cap on ReAct loop iterations
 
 

@@ -94,9 +94,23 @@ def extract_json_object(text: str) -> str:
 
 
 def parse_and_validate(text: str) -> Invoice:
-    """Parse the model reply into a validated ``Invoice`` (raises on failure)."""
+    """Parse the model reply into a validated ``Invoice`` (raises on failure).
+
+    Used by the ``text`` mode: the reply may be wrapped in prose/markdown, so we
+    first pull the JSON object out of the text by hand.
+    """
     raw = extract_json_object(text)
     data = json.loads(raw)  # may raise json.JSONDecodeError
+    return Invoice.model_validate(data)  # may raise ValidationError
+
+
+def parse_and_validate_native(text: str) -> Invoice:
+    """Parse a clean JSON reply (native JSON mode) into a validated ``Invoice``.
+
+    Native structured output returns the JSON object directly, so we ``json.loads``
+    it without the text-mode brace extraction.
+    """
+    data = json.loads(text)  # may raise json.JSONDecodeError
     return Invoice.model_validate(data)  # may raise ValidationError
 
 
@@ -110,19 +124,30 @@ def build_user_prompt(text: str) -> str:
     )
 
 
-def extract_invoice(text: str, *, llm_call: LLMCall) -> Invoice:
+def extract_invoice(
+    text: str, *, llm_call: LLMCall, mode: str = "text"
+) -> Invoice:
     """Extract an ``Invoice`` from raw text, validating with a single retry.
 
     1. Ask the model for JSON, parse + validate.
     2. On parse/validation failure, append the error to the prompt and ask once
        more.
     3. If it still fails, raise ``ExtractionError`` (the HTTP layer maps to 422).
+
+    ``mode`` selects the parsing strategy and must match how ``llm_call`` was
+    built:
+    - ``"text"`` (default): the reply is free-form; pull the JSON out of the text.
+    - ``"native"``: the caller used provider JSON mode, so the reply is a clean
+      JSON object parsed directly with ``json.loads``.
+
+    The validate + retry-once contract is identical for both modes.
     """
+    parse = parse_and_validate_native if mode == "native" else parse_and_validate
     user_prompt = build_user_prompt(text)
     reply = llm_call(SYSTEM_PROMPT, user_prompt)
 
     try:
-        return parse_and_validate(reply)
+        return parse(reply)
     except (ValueError, json.JSONDecodeError, ValidationError) as first_err:
         # Retry ONCE, telling the model exactly what was wrong.
         retry_prompt = (
@@ -133,7 +158,7 @@ def extract_invoice(text: str, *, llm_call: LLMCall) -> Invoice:
         )
         reply = llm_call(SYSTEM_PROMPT, retry_prompt)
         try:
-            return parse_and_validate(reply)
+            return parse(reply)
         except (ValueError, json.JSONDecodeError, ValidationError) as second_err:
             raise ExtractionError(
                 f"extraction failed after retry: {second_err}", raw=reply

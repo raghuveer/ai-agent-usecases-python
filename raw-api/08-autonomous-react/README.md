@@ -62,7 +62,12 @@ The loop appends `Observation: <tool result>` after each tool call and stops on
 | `LLM_BASE_URL` | `http://localhost:8080/v1` | OpenAI-compatible gateway |
 | `LLM_GATEWAY_KEY` | placeholder | `Authorization: Bearer` key |
 | `LLM_MODEL` | `claude-haiku-4-5` | model alias (qwen3 → `/no_think` auto-applied) |
+| `LLM_TEMPERATURE` | `0.0` | sampling temperature (0 = deterministic) |
+| `LLM_MAX_TOKENS` | per use case | max tokens for the primary generation |
 | `MAX_STEPS` | `6` | ReAct loop iteration cap |
+
+**Swapping models/providers:** set `LLM_BASE_URL` / `LLM_GATEWAY_KEY` / `LLM_MODEL` (and optional `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`) in `.env` — no code changes. See the root README's "Use a different model or provider" table.
+
 
 ## Run
 
