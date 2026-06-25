@@ -42,7 +42,7 @@ service's `/openapi.json` (e.g. ZAP's OpenAPI add-on) and provide a valid `LLM_G
 
 | # | Finding | Severity | Framework | Status |
 |---|---|---|---|---|
-| F1 | Vulnerable dependencies (LangChain/LangGraph/Starlette/Chroma/pytest) | 🟠 Medium | LLM03, A06 | **Documented — upgrade is a tracked follow-up** (§6) |
+| F1 | Vulnerable dependencies (LangChain/LangGraph/Starlette/Chroma/pytest) | 🟠 Medium | LLM03, A06 | **Remediated in v0.2.0** — upgraded to patched majors; 1 no-fix residual (chromadb, accepted) (§6) |
 | F2 | Arbitrary code execution in code-gen smoke-check when `RUN_CODE_CHECK=1` | 🟠 Medium (when enabled) | LLM05/LLM06, A03 | **Hardened** — off by default; RCE warning + sandbox guidance added |
 | F3 | No authentication / authorization on endpoints | ⚪ By-design | LLM06, A01/A07 | Documented; production guidance in §7 |
 | F4 | No request rate-limiting / unbounded LLM consumption | 🟡 Low | LLM10 | **Partially fixed** — input length/bounds caps added; rate-limit is deploy-time |
@@ -132,10 +132,31 @@ upgraded for hygiene and because downstream users may use those paths.
 **major breaking migrations** (v0→v1 API changes; LangGraph 1.0 changes the interrupt /
 checkpoint APIs that UC10 relies on). Bumping them blindly would break the green test suite.
 
-**Remediation plan (recommended, as a dedicated PR):**
-1. Low-risk first: bump FastAPI to pull **Starlette ≥ 0.47.2**; bump **pytest** (dev).
-2. Then the **LangChain 1.x / LangGraph 1.x** migration on a branch — update imports and the
-   UC10 interrupt/checkpoint code, re-run the full suite + CI, and ship as v0.2.0.
+**Remediation — DONE in v0.2.0.** Pyproject pins were bumped and verified by re-running OSV
+over the resolved versions and recreating venvs from scratch (CI-faithful). Outcome:
+
+| Package | v0.1.0 | v0.2.0 (patched) | Status |
+|---|---|---|---|
+| langchain | 0.3.30 | **1.3.11** | ✅ clean |
+| langchain-core | 0.3.86 | **1.4.8** | ✅ clean |
+| langchain-openai | 0.2.14 | **1.3.3** | ✅ clean |
+| langchain-text-splitters | 0.3.11 | **1.1.2** | ✅ clean |
+| langgraph | 0.2.76 | **1.2.6** | ✅ clean |
+| langgraph-checkpoint | 2.1.2 | **4.1.1** | ✅ clean |
+| starlette (via FastAPI) | 0.46.2 | **1.3.1** | ✅ clean |
+| pytest (dev) | 8.4.2 | **9.1.1** | ✅ clean |
+| chromadb | 1.5.9 | 1.5.9 (no fix published) / 0.6.3 in raw-api | ⚠️ **accepted residual** |
+
+The LangChain/LangGraph v1 migration required **no application-code changes** (the StateGraph /
+`interrupt()` / `Command` / `with_structured_output` / LCEL APIs we use are compatible); the only
+change was dropping the unmaintained `langchain-community` test-only dep in UC4 (research) and
+importing `FakeListChatModel` from its `langchain_core` canonical path. All 33 projects' unit
+tests pass; CI re-validates with fresh installs.
+
+**chromadb residual:** the advisory (GHSA-f4j7-r4q5-qw2c) is a *server-side* pre-auth code
+injection with **no published fix** as of this review. These examples use **embedded** chromadb
+(no server) so it is not exploitable here; raw-api/01-rag stays on the unaffected 0.6.x line.
+Tracked for upgrade once a fix ships.
 
 ---
 

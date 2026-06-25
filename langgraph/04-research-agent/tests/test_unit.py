@@ -5,7 +5,7 @@
 """Unit tests for UC4 research-agent (langgraph) — fully mocked, no network."""
 from __future__ import annotations
 
-from langchain_community.chat_models.fake import FakeListChatModel
+from langchain_core.language_models.fake_chat_models import FakeListChatModel
 from fastapi.testclient import TestClient
 
 from app import agent
