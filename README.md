@@ -1,9 +1,12 @@
 # AI Agent Use Cases — Raw API · LangChain · LangGraph
 
+[![unit-tests](https://github.com/raghuveer/ai-agent-usecases-python/actions/workflows/ci.yml/badge.svg)](https://github.com/raghuveer/ai-agent-usecases-python/actions/workflows/ci.yml)
+
+> Ten common LLM agent use cases — RAG, code-gen, data extraction, research, support triage, SQL, multi-agent, ReAct, recommendations, human-in-the-loop — each implemented three ways: **raw API**, **LangChain**, and **LangGraph**. Python + FastAPI, with unit & integration tests. A practical side-by-side of the three approaches.
+
 Ten common agent use cases, each implemented **three ways** — direct **Raw API**, **LangChain**, and **LangGraph** — in **Python + FastAPI**. The point is to *compare* the approaches on the same problems. Every folder is a self-contained, runnable project with its own tests.
 
-<!-- After pushing, replace <OWNER> to activate the badge:
-[![unit-tests](https://github.com/<OWNER>/ai-usecases/actions/workflows/ci.yml/badge.svg)](https://github.com/<OWNER>/ai-usecases/actions/workflows/ci.yml) -->
+**Other languages:** a TypeScript edition (LangChain.js + LangGraph.js) is planned at `ai-agent-usecases-typescript` _(coming soon)_.
 
 > **Status:** all 10 use cases built across all 3 approaches (30 projects + a `_template/` per approach). Each has offline, mocked **unit tests** and gated **integration tests**. Examples optimise for clarity of the approach, not production hardening.
 
