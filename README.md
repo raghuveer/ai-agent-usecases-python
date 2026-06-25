@@ -1,6 +1,11 @@
 # AI Agent Use Cases — Raw API · LangChain · LangGraph
 
 [![unit-tests](https://github.com/raghuveer/ai-agent-usecases-python/actions/workflows/ci.yml/badge.svg)](https://github.com/raghuveer/ai-agent-usecases-python/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/raghuveer/ai-agent-usecases-python?label=release)](https://github.com/raghuveer/ai-agent-usecases-python/releases)
+[![security review](https://img.shields.io/badge/security-reviewed-brightgreen)](docs/security-review.md)
+[![dependencies: pip-audit](https://img.shields.io/badge/deps-pip--audit%20%2B%20Dependabot-blue)](.github/dependabot.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![python](https://img.shields.io/badge/python-3.12-blue)](#)
 
 > Ten common LLM agent use cases — RAG, code-gen, data extraction, research, support triage, SQL, multi-agent, ReAct, recommendations, human-in-the-loop — each implemented three ways: **raw API**, **LangChain**, and **LangGraph**. Python + FastAPI, with unit & integration tests. A practical side-by-side of the three approaches.
 
@@ -8,7 +13,7 @@ Ten common agent use cases, each implemented **three ways** — direct **Raw API
 
 **Other languages:** a TypeScript edition (LangChain.js + LangGraph.js) is planned at `ai-agent-usecases-typescript` _(coming soon)_.
 
-> **Status:** all 10 use cases built across all 3 approaches (30 projects + a `_template/` per approach). Each has offline, mocked **unit tests** and gated **integration tests**. Examples optimise for clarity of the approach, not production hardening.
+> **Status — v0.2.0:** all 10 use cases built across all 3 approaches (30 projects + a `_template/` per approach), each with offline, mocked **unit tests** and gated **integration tests**. **Security-reviewed** against NIST · OWASP LLM Top 10 · OWASP Web Top 10 (see [`docs/security-review.md`](docs/security-review.md) / [`SECURITY.md`](SECURITY.md)); dependencies patched to current majors, with a CI `pip-audit` gate and Dependabot keeping them current. Examples optimise for clarity of the approach, not production hardening.
 
 ## Use-case matrix
 
