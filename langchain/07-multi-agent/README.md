@@ -1,0 +1,77 @@
+# UC7 — multi-agent (langchain)
+
+An **orchestrator** delegates to three specialised sub-agents and aggregates
+their work:
+
+- **researcher** — gathers bullet facts about the topic by a *deterministic,
+  offline* keyword search over `data/corpus/*.md` (no network, no LLM).
+- **writer** — an LCEL role chain (`ChatPromptTemplate | llm | StrOutputParser`)
+  that drafts a short summary from the research notes.
+- **reviewer** — an LCEL role chain that returns a critique plus an
+  `APPROVED: yes/no` verdict.
+- **revise loop** — if the reviewer rejects, the writer redrafts once (capped at
+  `MAX_REVISIONS`) using the critique.
+
+## How the langchain version is built
+
+Each sub-agent is a composable **LCEL chain** in `app/agents.py`. LangChain makes
+the per-agent prompt→model→parse pipeline clean, and the writer/reviewer chains
+compose sequentially. But LangChain has **no native sub-agent or shared-state
+primitive**, so the *coordination* — the reject → revise routing, the revision
+cap, and the aggregation — is still plain Python wrapped around the chains.
+
+That is the contrast with the showcase: in **`langgraph/07-multi-agent`** the
+same coordination is expressed declaratively as graph nodes joined by a
+conditional edge over one shared typed state. Here it is an imperative `while`
+loop. Same contract, different amount of hand-wiring.
+
+## API
+
+- `GET /health` → `{"status":"ok","approach":"langchain","usecase":"07-multi-agent"}`
+- `POST /run` body `{"topic": str}` →
+  `{"draft": str, "review": str, "approved": bool, "contributions": {"research", "writer", "reviewer"}}`
+
+## The corpus (offline researcher)
+
+`data/corpus/*.md` holds neutral topic notes (tidal energy, vertical farming,
+mesh networking). Neutral topic names are deliberate: the gateway's PII filter
+masks proper nouns/brands on the wire, so a branded corpus risks key terms being
+redacted. The researcher scores each bullet line by word overlap with the topic
+and returns the best `RESEARCH_TOP_K`.
+
+## Env vars (`.env.example`)
+
+| Var | Default | Meaning |
+|---|---|---|
+| `LLM_BASE_URL` | `http://localhost:8080/v1` | OpenAI-compatible gateway |
+| `LLM_GATEWAY_KEY` | placeholder | `Authorization: Bearer` key |
+| `LLM_MODEL` | `claude-haiku-4-5` | model alias (qwen3 → `/no_think` auto-applied) |
+| `RESEARCH_TOP_K` | `4` | corpus facts the researcher gathers |
+| `MAX_REVISIONS` | `1` | reviewer reject → writer revise cap |
+
+## Run
+
+```bash
+python -m uv venv
+python -m uv pip install --python .venv/Scripts/python.exe -e ".[dev]"
+
+# Offline unit tests (must pass with no network):
+.venv/Scripts/python.exe -m pytest tests/test_unit.py -q
+
+# Live model (needs the gateway running):
+RUN_INTEGRATION=1 .venv/Scripts/python.exe -m pytest tests/test_integration.py -q -m integration
+
+# Serve:
+.venv/Scripts/python.exe -m uvicorn app.main:app --reload
+# then: curl -X POST localhost:8000/run -H 'content-type: application/json' \
+#   -d "{\"topic\":\"tidal energy\"}"
+```
+
+## Model note (UC7-specific)
+
+This use case defaults to **`claude-haiku-4-5`**, not the free local Qwen.
+Reason: UC7 needs reliable *role-following* — the writer must draft only from the
+notes, and the reviewer must emit a parseable `APPROVED:` verdict — which the
+free local model could not do reliably. The integration test therefore spends a
+small, capped amount of Anthropic budget and is marked `anthropic`; unit tests
+remain fully mocked/offline and require no key.

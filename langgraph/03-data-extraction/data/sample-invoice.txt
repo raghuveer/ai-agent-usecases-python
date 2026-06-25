@@ -1,0 +1,16 @@
+Northwind Robotics
+
+INVOICE  #INV-2045
+Date: 2026-05-14
+
+Order summary:
+
+- 2x ServoMax 9000 actuator ........ 1,250.00
+- 1x Lidar sensor module ............ 480.50
+- Shipping & handling ............... 64.99
+
+Subtotal: 1,795.49
+Tax (6%): 107.73
+Total due: 1,903.22
+
+Payment terms: net 30. Please remit to Northwind Robotics.

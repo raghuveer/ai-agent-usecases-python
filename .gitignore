@@ -1,0 +1,33 @@
+# --- Secrets / local environment (NEVER commit) ---
+.env
+**/.env
+.claude/settings.local.json
+# (.env.example IS committed — the exact ".env" pattern above does not match it)
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# --- Virtual environments ---
+.venv/
+**/.venv/
+venv/
+env/
+
+# --- Vector stores / databases / build artifacts ---
+.chroma/
+**/.chroma/
+*.db
+*.sqlite
+*.sqlite3
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "m1",
+    "title": "Starfall Horizon",
+    "genres": ["sci-fi", "adventure"],
+    "tags": ["space", "exploration", "epic"]
+  },
+  {
+    "id": "m2",
+    "title": "The Last Algorithm",
+    "genres": ["sci-fi", "thriller"],
+    "tags": ["ai", "suspense", "near-future"]
+  },
+  {
+    "id": "m3",
+    "title": "Quiet Harbor",
+    "genres": ["drama", "romance"],
+    "tags": ["slow-burn", "character-study", "coastal"]
+  },
+  {
+    "id": "m4",
+    "title": "Iron Verdict",
+    "genres": ["action", "thriller"],
+    "tags": ["heist", "suspense", "gritty"]
+  },
+  {
+    "id": "m5",
+    "title": "Laugh Lines",
+    "genres": ["comedy"],
+    "tags": ["feel-good", "ensemble", "witty"]
+  },
+  {
+    "id": "m6",
+    "title": "Nebula Heist",
+    "genres": ["sci-fi", "action"],
+    "tags": ["space", "heist", "epic"]
+  },
+  {
+    "id": "m7",
+    "title": "Whispering Pines",
+    "genres": ["horror", "mystery"],
+    "tags": ["slow-burn", "suspense", "atmospheric"]
+  },
+  {
+    "id": "m8",
+    "title": "Two Left Feet",
+    "genres": ["comedy", "romance"],
+    "tags": ["feel-good", "witty", "coastal"]
+  }
+]

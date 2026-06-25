@@ -1,0 +1,20 @@
+[
+  {
+    "user_id": "u1",
+    "name": "Ava",
+    "liked_genres": ["sci-fi", "adventure"],
+    "liked_tags": ["space", "epic", "exploration"]
+  },
+  {
+    "user_id": "u2",
+    "name": "Ben",
+    "liked_genres": ["comedy", "romance"],
+    "liked_tags": ["feel-good", "witty"]
+  },
+  {
+    "user_id": "u3",
+    "name": "Cara",
+    "liked_genres": ["thriller", "action"],
+    "liked_tags": ["suspense", "heist", "gritty"]
+  }
+]
