@@ -1,0 +1,50 @@
+# Dependabot keeps dependencies current across the repo.
+# Docs: https://docs.github.com/code-security/dependabot/dependabot-version-updates
+#
+# Monorepo note: each of the 33 projects has its own pyproject.toml, so the `pip`
+# config below uses directory globs to cover them all in one block. Dependabot
+# raises updates per manifest, so an update to a widely-used package (e.g.
+# langchain) can open several PRs. To keep the noise down we (a) group all
+# minor/patch bumps per project into a single PR, (b) cap open PRs, and (c) leave
+# MAJOR bumps as individual PRs so breaking changes (like the LangChain/LangGraph
+# v0->v1 migration) get reviewed one at a time.
+version: 2
+updates:
+  # ---- Python dependencies (all approaches × all use cases + templates) ----
+  - package-ecosystem: "pip"
+    directories:
+      - "/raw-api/*"
+      - "/langchain/*"
+      - "/langgraph/*"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps"
+    groups:
+      # One grouped PR per project for all non-breaking updates.
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    # Major bumps are intentionally NOT grouped — they arrive as separate,
+    # individually-reviewable PRs.
+
+  # ---- GitHub Actions used by the CI workflow ----
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        patterns:
+          - "*"

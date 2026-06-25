@@ -170,7 +170,7 @@ These are intentionally **absent** from the examples; add them before any real d
 - **Disable `/docs` & `/openapi.json`** (or gate them) in production — A05.
 - **Structured logging + audit trail** of prompts, tool calls, and decisions — A09 / NIST RV.
 - **Never enable `RUN_CODE_CHECK`** outside a disposable, network-isolated, resource-capped sandbox — F2.
-- **Keep dependencies patched** (Dependabot/Renovate + CI `pip-audit`) — A06/LLM03.
+- **Keep dependencies patched** — ✅ **Dependabot is configured** (`.github/dependabot.yml`: weekly pip + github-actions updates, minor/patch grouped, majors individual). Consider also adding `pip-audit` to CI — A06/LLM03.
 
 ---
 
