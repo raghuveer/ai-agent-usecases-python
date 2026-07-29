@@ -36,7 +36,9 @@ def test_extracts_sample_invoice_into_valid_record():
         assert body["valid"] is True, body["errors"]
         invoice = body["invoice"]
         assert invoice["invoice_number"] == "INV-2026-0042"
-        assert "Northwind" in invoice["vendor"]
+        # Case-insensitive: the prompt tells the agent to copy values verbatim,
+        # and the document renders the vendor as "NORTHWIND TRADERS".
+        assert "northwind" in invoice["vendor"].lower()
         assert invoice["currency"].upper() == "USD"
         # The number must survive the "$1,284.50" formatting.
         assert invoice["total"] == pytest.approx(1284.50)

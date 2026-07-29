@@ -53,7 +53,15 @@ Three use cases were run live against the gateway (UC02, UC08, UC10). **Every on
 6. **Prompt caching does not pass through the gateway** (`cache_read_input_tokens: 0`), so every agent turn re-pays the full Claude Code harness prompt. Measured: ~847 input tokens for a *trivial* one-shot call, and **$0.35–0.48 for a 9–10 turn code-gen run** on `claude-haiku`. The original `$0.25` cap was exhausted in 15 seconds. Defaults raised to `AGENT_MAX_TURNS=12`, `AGENT_MAX_BUDGET_USD=1.00`.
 7. **The gateway's `empty_input` guardrail blocks short prompts** — a `"Say OK"` probe returns `400 NO_SOURCE_PROVIDED / empty_input`. Affects hand-testing with curl, not the examples themselves.
 
+**Second live pass (the remaining seven use cases) found three more:**
+
+8. **`setting_sources=[]` does NOT isolate the run — the most serious finding.** It gates `settings.json` only; the CLI still loads the developer's `~/.claude` project **memory** and parent `CLAUDE.md`. A probe agent recited this repo's private memory index *verbatim*, and UC07 was answering from that leaked context instead of its own corpus (zero tool calls, wrong answer). Fixed by pointing **`CLAUDE_CONFIG_DIR` at a throwaway directory** in `sdk_env()`, which returns `NONE VISIBLE`. Both a reproducibility bug and a disclosure risk — see `docs/security-review.md` **F14**.
+9. **The delegation tool is named `Agent`, not `Task`.** UC07's trace extraction matched `Task` and so always reported zero subagents even when delegation worked. The live call is `Agent` carrying `subagent_type`. Both names are now accepted.
+10. **The SDK has no `tool_choice`, so "always call this tool" must be carried by the prompt.** UC05 skipped `emit_triage` entirely on a simple question and just answered conversationally — 1 turn, no decision. Fixed by making the prompt state that every ticket gets a decision and that the reply belongs in the tool's field, not in message text.
+
+One further failure was a **test bug, not an app bug**: UC03 asserted `"Northwind" in vendor` case-sensitively while the agent correctly copied `NORTHWIND TRADERS` verbatim from the document, exactly as its prompt demands.
+
 ## Status
 - **10/10 use cases × 4 approaches = 40 projects built.**
-- `claude-agent-sdk`: **131 offline unit tests green** (up from 125 — six added as regressions for the bugs above). 14 integration tests written and gated; **UC02, UC08, UC10 verified live and passing**. The remaining seven are written and collecting but not yet run live.
+- `claude-agent-sdk`: **131 offline unit tests green**. **All 14 integration tests verified live and passing — all 10 use cases.** Two live passes found 8 defects plus 1 test bug; every one is fixed, and the security-relevant ones (F10, F11, F14) are in `docs/security-review.md`.
 - raw-api / langchain / langgraph: unit + integration green as of v0.2.0 — but see Platform drift: their `.env` still points at the retired `:8080`.

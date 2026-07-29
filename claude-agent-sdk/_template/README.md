@@ -54,9 +54,22 @@ verify the parsing against what the CLI actually emits.
 An agent loop makes an unbounded number of model calls, so both a turn cap and a
 hard dollar cap are set on every run. `build_options` also pins:
 
-- `setting_sources=[]` — **load-bearing.** Stops the SDK reading the developer's
-  `~/.claude` and the repo's `.claude/`, so a run behaves the same on a laptop
-  and in CI. Without it these examples would silently inherit local config.
+- `setting_sources=[]` — stops the SDK reading `settings.json` from the
+  developer's `~/.claude` and the repo's `.claude/`.
+- `CLAUDE_CONFIG_DIR` pointed at a throwaway directory (in `sdk_env`) — **this is
+  what actually isolates the run**, and it is easy to get wrong.
+
+> ⚠️ **`setting_sources=[]` is not enough on its own.** It gates *settings files*
+> only. It does **not** stop the CLI loading the developer's `~/.claude` project
+> **memory** or a parent `CLAUDE.md`. Verified empirically: with
+> `setting_sources=[]` set, a probe agent recited this repository's private
+> memory index verbatim. Pointing `CLAUDE_CONFIG_DIR` at an empty directory
+> returns `NONE VISIBLE`.
+>
+> This matters twice over — **reproducibility** (a run must not depend on whose
+> laptop it is on; UC07 was answering from leaked memory instead of its own
+> corpus) and **disclosure** (developer memory could otherwise be echoed into an
+> API response). See `docs/security-review.md` F14.
 - `tools=[]` — start from no built-in tools; each use case opts in explicitly, so
   the README's tool list is the truth.
 

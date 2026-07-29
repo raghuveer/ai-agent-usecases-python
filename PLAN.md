@@ -66,10 +66,9 @@ Working rules that differ from Phases 0–5:
 - **Phase 4** — UC7 multi-agent (Haiku), UC10 HITL (free local) built across all three; unit + integration green. raw-api/07 and raw-api/10 carry "why impractical here" notes pointing to their langgraph siblings. ✅
 - **Phase 5** — released as v0.2.0: navigable root README, CI running unit tests only, per-folder READMEs, security review, dependency gates. ✅
 - **Phase 6** — `claude-agent-sdk` × 10 use cases built; **131 offline unit tests green**; 14 integration tests written, collecting, and gated. ✅
-- **Phase 6b — live validation** (2026-07-29): fresh `sk-aiup-…` key minted under phase `poc-ai-usecases-agentsdk`; **UC02, UC08, UC10 run live and passing**. The run exposed five defects invisible to mocked tests (see `TRACKING.md` → Live-run findings); all fixed with regression tests, and the turn/budget defaults re-baselined from measured cost. ✅
+- **Phase 6b — live validation** (2026-07-29): fresh `sk-aiup-…` key minted under phase `poc-ai-usecases-agentsdk`; **all 10 use cases run live and passing** across two passes. Exposed **8 defects invisible to mocked tests** (see `TRACKING.md` → Live-run findings) — including `setting_sources=[]` failing to isolate developer memory, and the delegation tool being named `Agent` rather than `Task`. All fixed with regression tests; turn/budget defaults re-baselined from measured cost. ✅
 - **ALL 10 use cases × 4 approaches = 40 projects complete.**
 
 ### Notes for whoever runs this next
 - **Minting keys now needs MFA.** `seed-virtual-keys.mjs` predates ADR 0042: a bare login returns a `token_use: mfa_pending` token (300s TTL) with no roles, so project creation 403s with "admin role required". Complete the step-up at `POST /v1/auth/mfa/verify` with `{"factorType": "...", "code": "..."}` before driving projects-ms.
 - **Re-point the 30 older projects** at `:8094` and the unsuffixed model aliases — their `.env.example` still names the retired `:8080` (see `TRACKING.md` → Platform drift). Not yet done.
-- **Live-run the remaining seven** `claude-agent-sdk` integration tests (UC01, 03, 04, 05, 06, 07, 09). Budget ~$0.3–0.5 each through the gateway.

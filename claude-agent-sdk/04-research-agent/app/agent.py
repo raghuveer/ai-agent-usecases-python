@@ -30,6 +30,7 @@ Setting ``ANTHROPIC_API_KEY`` makes the CLI send ``x-api-key`` (→ 401); settin
 """
 from __future__ import annotations
 
+import tempfile
 from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -71,6 +72,12 @@ class AgentResult:
         return [t.name for t in self.tool_calls]
 
 
+# One throwaway config dir per process. Keeping the CLI's config out of the
+# developer's ~/.claude is the only reliable way to stop project memory and
+# CLAUDE.md leaking into agent context (see sdk_env).
+_ISOLATED_CONFIG_DIR = tempfile.mkdtemp(prefix="agentsdk-config-")
+
+
 def sdk_env(settings: Settings) -> dict[str, str]:
     """Environment for the Agent SDK subprocess.
 
@@ -85,6 +92,17 @@ def sdk_env(settings: Settings) -> dict[str, str]:
         # The CLI otherwise emits telemetry and update checks we neither want nor
         # can reach from an air-gapped host.
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+        # THIS is what actually isolates the run. `setting_sources=[]` gates
+        # settings.json files ONLY — it does NOT stop the CLI loading the
+        # developer's ~/.claude project memory or a parent CLAUDE.md. Verified
+        # empirically: with setting_sources=[] set, a probe agent still recited
+        # this repo's private memory index verbatim. Pointing CLAUDE_CONFIG_DIR
+        # at an empty directory returns "NONE VISIBLE".
+        #
+        # Two reasons this matters: reproducibility (a run must not depend on
+        # whose laptop it is on), and disclosure (developer memory could
+        # otherwise be echoed into an API response).
+        "CLAUDE_CONFIG_DIR": _ISOLATED_CONFIG_DIR,
     }
 
 

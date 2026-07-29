@@ -251,6 +251,7 @@ guarded exception, and it is unit-tested with an injection payload.
 | **F11** | Human-approval gate fails **open** on a config mistake | 🟠 Medium | LLM06 | **Fixed** + regression test |
 | **F12** | Parked HITL runs have no TTL or eviction | 🟡 Low | LLM10 | Documented; deploy-time concern |
 | **F13** | Agent runtime depends on an external CLI resolved from `PATH` | 🟡 Low | LLM03, A08 | Documented |
+| **F14** | **Developer `~/.claude` memory leaked into agent context** despite `setting_sources=[]` | 🟠 Medium | LLM02, LLM07 | **Fixed** — `CLAUDE_CONFIG_DIR` isolation |
 
 **F9 — shell execution on by default.** This is the sharpest difference from the
 v0.2.0 review. There, arbitrary code execution existed only behind
@@ -295,6 +296,24 @@ Acceptable for a single-process example; production needs a timeout that denies
 and reaps. Related: the design is single-worker by construction — a parked
 coroutine cannot be resumed by another process.
 
+**F14 — developer memory leaked into agent context.** `setting_sources=[]` is
+documented as "SDK isolation mode", and this repo relied on it. It is **not
+sufficient**: it gates `settings.json` files only, and the CLI still loads the
+developer's `~/.claude` **project memory** and any parent `CLAUDE.md`. Confirmed
+by direct probe — an agent with no tools, asked what memory it could see,
+recited this repository's private memory index **verbatim** (five entries). It
+was also causing wrong answers: UC07 was responding from that leaked context
+instead of searching its own corpus.
+
+Impact is twofold. **Disclosure (LLM02/LLM07):** whatever a developer keeps in
+project memory — architecture notes, credentials-adjacent operational detail,
+customer names — is injected into every agent run on that machine and can be
+echoed into an API response. **Reproducibility:** a run's behaviour depended on
+whose laptop it executed on, which for a public reference repo is its own kind of
+defect. Fixed by pointing **`CLAUDE_CONFIG_DIR` at a throwaway directory** in
+`sdk_env()` (the probe then returns `NONE VISIBLE`). Anyone copying this pattern
+should assume `setting_sources=[]` alone leaves memory attached.
+
 **F13 — external CLI dependency.** The Python SDK spawns the Claude Code CLI
 (Node) found on `PATH`, and passes the gateway credential to it via subprocess
 environment. This is a runtime dependency outside the Python dependency audit: a
@@ -309,16 +328,18 @@ hijacked `PATH` or compromised CLI install would see the key. Pin via
 | **LLM05** Improper Output Handling | 🔴 **Escalated (F9).** Model output is *executed by design* rather than behind a default-off flag. |
 | **LLM06** Excessive Agency | 🟠 **Highest in the repo.** Built-in filesystem/shell tools plus subagents. Counterweights: per-subagent tool allow-lists (UC07 gives `analyst`/`writer` **no** tools), an explicit permission gate (UC10), and hard turn/budget caps everywhere. |
 | **LLM10** Unbounded Consumption | 🟢 **Stronger than elsewhere.** The only approach capping **both** turns (`max_turns`) and spend (`max_budget_usd`) per run, not just `max_tokens`. F12 is the remaining gap. |
-| **LLM02** Sensitive Info Disclosure | 🟢 **Good, with a new control.** `collect()` deliberately discards `ThinkingBlock` content, so chain-of-thought never reaches API responses. Credentials travel via subprocess env and are not logged (F13 noted). |
+| **LLM02** Sensitive Info Disclosure | 🟠 **Was a real leak (F14), now fixed.** Developer `~/.claude` memory reached agent context despite `setting_sources=[]`; closed via `CLAUDE_CONFIG_DIR` isolation. Positive control retained: `collect()` discards `ThinkingBlock` content so chain-of-thought never reaches API responses. Credentials travel via subprocess env and are not logged (F13 noted). |
 | **LLM03** Supply Chain | 🟢 Dependency tree clean (§11.1); F13 is the non-Python addition. |
 | **A03** Injection | 🟢 **Good.** The SQL agent keeps two independent defences (syntactic single-`SELECT` validator **plus** driver-level `mode=ro`); UC08's calculator is an AST allow-list with no `eval`, tested against `__import__` / `__subclasses__` payloads. |
 | **A08** Integrity | 🟡 F13 (CLI resolved from `PATH`). |
 
 ### 11.4 Why the live runs mattered
 
-Five defects passed the mocked unit-test suite and were caught only by running
-real agents (UC02, UC08, UC10). Two were security-relevant (**F10**, **F11**);
-the rest were correctness. That is direct evidence that for agentic systems,
+Eight defects passed the mocked unit-test suite and were caught only by running
+real agents (all 10 use cases, across two passes). Three were security-relevant
+(**F10**, **F11**, **F14**); the rest were correctness — including a delegation
+trace that silently reported nothing because the built-in tool is named `Agent`,
+not `Task`. That is direct evidence that for agentic systems,
 mocked tests verify *your* logic but cannot verify *the agent's behaviour* — the
 gated integration tests are not optional ceremony. Full list in `TRACKING.md` →
 Live-run findings.
@@ -332,5 +353,7 @@ Live-run findings.
 - **Add a TTL/reaper for parked approvals**, and run UC10 as a **single worker** (F12).
 - **Pin `cli_path`** and control `PATH` where the runtime is untrusted (F13).
 - **Treat `cwd` as ergonomics, not isolation** (F10).
+- **Set `CLAUDE_CONFIG_DIR` to a throwaway directory** — `setting_sources=[]`
+  alone does **not** detach developer memory or a parent `CLAUDE.md` (F14).
 - Keep the per-run `max_turns` / `max_budget_usd` caps — they are the only thing
   bounding an agent loop's cost and runtime.

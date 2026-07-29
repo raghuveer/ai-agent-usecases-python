@@ -6,12 +6,12 @@ report. In this approach the orchestration is **a dict**.
 ## The team
 
 `ClaudeAgentOptions.agents` takes `{name: AgentDefinition}`. The lead delegates
-with the built-in `Task` tool; the SDK spawns, isolates, and collects each one.
+with the built-in `Agent` tool; the SDK spawns, isolates, and collects each one.
 
 ```
-lead ──► Task(researcher) ──► findings ┐
-     ──► Task(analyst)   ──► analysis  ├──► lead writes the report
-     ──► Task(writer)    ──► prose     ┘
+lead ──► Agent(researcher) ──► findings ┐
+     ──► Agent(analyst)   ──► analysis  ├──► lead writes the report
+     ──► Agent(writer)    ──► prose     ┘
 ```
 
 | Subagent | Tools | Why |
@@ -32,7 +32,7 @@ split is inspectable, and a unit test asserts no subagent can `Write` or `Bash`.
 | Spawn a specialist | hand-rolled orchestrator (marked impractical) | workaround | sub-graph | `AgentDefinition` entry |
 | Isolate its context | manual message-list surgery | partial | separate graph state | automatic per subagent |
 | Restrict its tools | manual branching | manual | manual | `tools=[...]` per subagent |
-| Invoke it | you write the dispatch | you write the dispatch | edge into the sub-graph | built-in `Task` tool |
+| Invoke it | you write the dispatch | you write the dispatch | edge into the sub-graph | built-in `Agent` tool |
 
 ## Corpus
 
@@ -54,7 +54,7 @@ needs the headroom) and `AGENT_MAX_BUDGET_USD` is the backstop.
   `{"report": str, "subagents_used": [str], "tools_used": [str],
     "num_turns": int, "cost_usd": float}`
 
-`subagents_used` is read back out of the `Task` tool calls, so it reflects what
+`subagents_used` is read back out of the `Agent` tool calls, so it reflects what
 the lead *actually* delegated, not what it was told to do.
 
 ## Env vars (`.env.example`)

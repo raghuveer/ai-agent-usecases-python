@@ -5,12 +5,12 @@
 """Multi-agent orchestration via the SDK's native subagents.
 
 `ClaudeAgentOptions.agents` takes a dict of :class:`AgentDefinition`s. The lead
-agent then delegates to them with the built-in `Task` tool, and the SDK handles
+agent then delegates to them with the built-in `Agent` tool, and the SDK handles
 spawning, isolating, and collecting each one:
 
-    lead ──► Task(researcher) ──► findings ┐
-         ──► Task(analyst)   ──► analysis  ├──► lead writes the report
-         ──► Task(writer)    ──► prose     ┘
+    lead ──► Agent(researcher) ──► findings ┐
+         ──► Agent(analyst)   ──► analysis  ├──► lead writes the report
+         ──► Agent(writer)    ──► prose     ┘
 
 Each subagent gets its **own context window and its own tool allow-list**. That
 last part is the real payoff and is hard to reproduce elsewhere: `researcher` can
@@ -41,7 +41,7 @@ For the user's question:
 3. Delegate the final write-up to the `writer` subagent.
 4. Return the writer's report as your final answer.
 
-Use the Task tool to delegate. Do not read the corpus yourself — that is the
+Use the Agent tool to delegate. Do not read the corpus yourself — that is the
 researcher's job. Keep the final report under 200 words."""
 
 TEAM: dict[str, AgentDefinition] = {
@@ -77,8 +77,13 @@ TEAM: dict[str, AgentDefinition] = {
     ),
 }
 
-# `Task` is the built-in delegation tool; the read tools let the *subagents* work.
-TEAM_TOOLS = ["Task", "Grep", "Glob", "Read"]
+# `Agent` is the built-in delegation tool in claude-agent-sdk 0.2.x (the docs
+# elsewhere call this "the Task tool"; the wire name observed from a live run is
+# `Agent`, carrying `subagent_type`). `Task` is kept for forward/backward
+# compatibility in case the name moves again. The read tools let the *subagents*
+# do their work.
+DELEGATION_TOOLS = ("Agent", "Task")
+TEAM_TOOLS = ["Agent", "Task", "Grep", "Glob", "Read"]
 
 
 @dataclass
@@ -93,11 +98,12 @@ class TeamResult:
 def _subagents_from(tool_calls) -> list[str]:
     """Which subagents the lead actually delegated to, in order.
 
-    Delegations surface as `Task` tool calls carrying a `subagent_type`.
+    Delegations surface as ``Agent`` tool calls carrying a ``subagent_type``
+    (verified against a live run; see :data:`DELEGATION_TOOLS`).
     """
     used: list[str] = []
     for call in tool_calls:
-        if call.name == "Task":
+        if call.name in DELEGATION_TOOLS:
             name = call.input.get("subagent_type")
             if name:
                 used.append(name)

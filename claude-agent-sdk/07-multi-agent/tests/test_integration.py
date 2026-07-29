@@ -38,6 +38,6 @@ def test_lead_delegates_and_returns_a_report():
 
         assert body["report"].strip(), "the team must produce a report"
         # The delegation is the whole point — assert it actually happened.
-        assert body["subagents_used"], "lead must delegate via the Task tool"
+        assert body["subagents_used"], "lead must delegate via the Agent tool"
         assert set(body["subagents_used"]) <= {"researcher", "analyst", "writer"}
-        assert "Task" in body["tools_used"]
+        assert "Agent" in body["tools_used"]
