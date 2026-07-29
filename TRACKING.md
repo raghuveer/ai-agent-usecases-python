@@ -40,6 +40,7 @@ Build-state cells map left→right to raw-api / langchain / langgraph / claude-a
 ## Platform drift (found 2026-07-29) — RESOLVED
 - Gateway moved **`:8080` → `:8094`**; LiteLLM tier removed (ADR 0036) — `projects-ms` mints native `sk-aiup-…` keys, and model aliases dropped version suffixes (`claude-haiku`, not `claude-haiku-4-5`). Minting a key now also requires an **MFA step-up** (ADR 0042), which `seed-virtual-keys.mjs` predates.
 - **Impact:** all 30 pre-existing projects pointed at the retired port with stale aliases and dead keys, so none of their integration tests could run.
+- **Keys re-provisioned 2026-07-29:** all ten per-use-case phases recreated with fresh keys (4 model aliases each), distributed across all 40 projects and verified live.
 - **Fixed 2026-07-29:** swept 66 files (33 `.env.example` + 33 `settings.py`) to `:8094` and the unsuffixed aliases, re-keyed all 30 `.env` files, and re-verified live — `raw-api/01-rag` and `langgraph/10-hitl-approval` on free local Qwen, `langchain/03-data-extraction` on cloud. **350 offline unit tests green across the 30.** The three `_template/` defaults also moved off the raw `qwen3:1.7b` tag, which the gateway never accepted (aliases only).
 
 ## Live-run findings (claude-agent-sdk, validated 2026-07-29)

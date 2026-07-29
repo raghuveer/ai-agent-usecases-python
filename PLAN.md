@@ -37,9 +37,11 @@ Batch the ones that run well on local Qwen, all three approaches each:
 - **Packaging:** **`pyproject.toml` + `uv`** for every project.
 
 ## Platform provisioning convention (project / phase / key)
-Each use case maps to one AIUP **phase** (an engagement) under the **project** `ai-usecases` (org `acme-corp`). A single **virtual key** per phase — alias `enterprise_architect-poc-ai-usecases-uc<NN>-<slug>` — is reused by that use case's raw-api/langchain/langgraph integration tests. Key values live only in each project's gitignored `.env`. Apps call the gateway with an allow-listed alias: `qwen-local-instruct` (free default) / `qwen-local-coder` (free, code) / `claude-haiku` (budget). Seeding commands and ids: see memory `aiup-usecases-provisioning`.
+Each use case maps to one AIUP **phase** (an engagement) under the **project** `ai-usecases`. A single **virtual key** per phase is reused by that use case's raw-api / langchain / langgraph / **claude-agent-sdk** integration tests — four projects per key, forty projects across ten keys. Key values live only in each project's gitignored `.env`. Apps call the gateway with an allow-listed alias: `qwen-local-instruct` (free default) / `qwen-local-coder` (free, code) / `claude-haiku` (budget). Seeding commands and ids: see memory `aiup-usecases-provisioning`.
 
-Phases provisioned (one key each): uc01-rag … uc10-hitl — all 10. **Superseded 2026-07-29:** the platform rebuild wiped the `ai-usecases` project and every one of those keys. A single phase `poc-ai-usecases-agentsdk` was recreated with one key (aliases `claude-haiku`, `claude-sonnet`, `qwen-local-instruct`, `qwen-local-coder`) and is currently shared by all 40 projects. Re-provisioning per-use-case phases is a tidy-up task, not a blocker.
+Phases provisioned (one key each): uc01-rag, uc02-codegen, uc03-extraction, uc04-research, uc05-triage, uc06-sql, uc07-multiagent, uc08-react, uc09-recommendations, uc10-hitl — all 10.
+
+**Re-provisioned 2026-07-29.** The platform rebuild wiped the `ai-usecases` project and every key. All ten phases were recreated, each with a fresh `sk-aiup-…` key allow-listing `claude-haiku`, `claude-sonnet`, `qwen-local-instruct`, `qwen-local-coder`, and distributed to all 40 `.env` files. Verified live on the new keys (`raw-api/01-rag` free-local, `claude-agent-sdk/10-hitl-approval` cloud). Minting now requires an MFA step-up (ADR 0042) that `seed-virtual-keys.mjs` predates — see the note below.
 
 ## Phase 6 — 4th approach: `claude-agent-sdk` (2026-07-29)
 
