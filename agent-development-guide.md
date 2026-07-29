@@ -1,6 +1,9 @@
+<!-- Extended 2026-07-29 with the fourth approach (claude-agent-sdk).
+Per-use-case implementation deltas live in SPEC.md §7 and TRACKING.md. -->
+
 # Agent Development: Use Cases, Frameworks & Scalability
 
-> A reference guide for enterprise architects covering 10 agent use cases, three development approaches (Raw API, LangChain, LangGraph), scalability considerations, and language support.
+> A reference guide for enterprise architects covering 10 agent use cases, four development approaches (Raw API, LangChain, LangGraph, Claude Agent SDK), scalability considerations, and language support.
 
 ---
 
@@ -8,10 +11,11 @@
 
 1. [The 10 Use Cases](#1-the-10-use-cases)
 2. [Approach Comparison Matrix](#2-approach-comparison-matrix)
-3. [The Three Approaches](#3-the-three-approaches)
+3. [The Four Approaches](#3-the-four-approaches)
    - [Raw API + LiteLLM / AI Gateway](#31-raw-api--litellm--ai-gateway)
    - [LangChain](#32-langchain)
    - [LangGraph](#33-langgraph)
+   - [Claude Agent SDK](#34-claude-agent-sdk)
 4. [Workflows vs Agents](#4-workflows-vs-agents)
 5. [Scalability](#5-scalability)
 6. [Language Support](#6-language-support)
@@ -89,7 +93,7 @@ The agent decides which tool to invoke next based on its observation of the prev
 Pulls user profile data and contextual signals, optionally queries a product/content database, then generates ranked recommendations with natural language explanations.
 
 **Key components:** profile store, retrieval, ranking logic, explanation generation  
-**Complexity:** Low to Medium — works well across all three approaches
+**Complexity:** Low to Medium — works well across all four approaches
 
 ---
 
@@ -103,24 +107,24 @@ The agent pauses at defined checkpoints (e.g., before executing a high-risk acti
 
 ## 2. Approach Comparison Matrix
 
-| # | Use Case | Raw API | LangChain | LangGraph |
-|---|----------|---------|-----------|-----------|
-| 1 | Q&A / RAG chatbot | ✓ Simple | ✓ Best fit | ~ Overkill |
-| 2 | Code generation | ✓ Fine | ✓ Tools help | ~ Only if iterative |
-| 3 | Data extraction | ✓ Great | ✓ Document loaders | ~ Unless pipeline |
-| 4 | Research agent | ~ Manual loops | ✓ Agents + tools | ✓ Parallel nodes |
-| 5 | Customer support | ~ No routing | ✓ Chain + memory | ✓ State machines |
-| 6 | SQL / DB agent | ✓ Direct | ✓ SQL chain | ✓ With validators |
-| 7 | Multi-agent system | ✗ Complex DIY | ~ Possible | ✓ Native support |
-| 8 | Autonomous workflow | ✗ Hard to build | ~ Partial | ✓ Graph cycles |
-| 9 | Recommendations | ✓ Direct | ✓ With memory | ✓ Profile + state |
-| 10 | Human-in-the-loop | ✗ Ad-hoc only | ~ Callbacks | ✓ `interrupt()` built-in |
+| # | Use Case | Raw API | LangChain | LangGraph | Claude Agent SDK |
+|---|----------|---------|-----------|-----------|------------------|
+| 1 | Q&A / RAG chatbot | ✓ Simple | ✓ Best fit | ~ Overkill | ~ Lexical only, no vector store |
+| 2 | Code generation | ✓ Fine | ✓ Tools help | ~ Only if iterative | ✓✓ Built-in Write/Bash loop |
+| 3 | Data extraction | ✓ Great | ✓ Document loaders | ~ Unless pipeline | ~ One-shot; harness idle |
+| 4 | Research agent | ~ Manual loops | ✓ Agents + tools | ✓ Parallel nodes | ✓ Built-in WebSearch/WebFetch |
+| 5 | Customer support | ~ No routing | ✓ Chain + memory | ✓ State machines | ✓ Agent decides routing |
+| 6 | SQL / DB agent | ✓ Direct | ✓ SQL chain | ✓ With validators | ✓ Agent discovers schema |
+| 7 | Multi-agent system | ✗ Complex DIY | ~ Possible | ✓ Native support | ✓✓ Subagents as data |
+| 8 | Autonomous workflow | ✗ Hard to build | ~ Partial | ✓ Graph cycles | ✓✓ The SDK *is* the loop |
+| 9 | Recommendations | ✓ Direct | ✓ With memory | ✓ Profile + state | ~ Modest win over one call |
+| 10 | Human-in-the-loop | ✗ Ad-hoc only | ~ Callbacks | ✓ `interrupt()` built-in | ✓✓ `can_use_tool` — but in-process only |
 
-**Legend:** ✓ Suitable &nbsp;|&nbsp; ~ Partial / workaround &nbsp;|&nbsp; ✗ Not ideal
+**Legend:** ✓✓ Showcase &nbsp;|&nbsp; ✓ Suitable &nbsp;|&nbsp; ~ Partial / workaround &nbsp;|&nbsp; ✗ Not ideal
 
 ---
 
-## 3. The Three Approaches
+## 3. The Four Approaches
 
 ### 3.1 Raw API + LiteLLM / AI Gateway
 
@@ -207,9 +211,41 @@ Define State (TypedDict)
 
 ---
 
+### 3.4 Claude Agent SDK
+
+Claude Code packaged as a library (`claude-agent-sdk`). Where the other three give you
+pieces to assemble a loop, this supplies the loop, a set of built-in tools, subagents,
+hooks, and a permission callback. You provide tools and a prompt.
+
+**How it works:**
+```
+ClaudeAgentOptions(system_prompt, tools, agents, can_use_tool, max_turns, max_budget_usd)
+  → query(prompt, options)
+  → SDK spawns the Claude Code CLI, runs the agent loop, executes tools
+  → async stream of messages back
+```
+
+**Strengths:**
+- Built-in `Read`/`Write`/`Edit`/`Bash`/`Glob`/`Grep`/`WebSearch`/`WebFetch` — no tool plumbing
+- Subagents are declarative: `{name: AgentDefinition}`, each with its own context **and tool allow-list** (least privilege per role)
+- `can_use_tool` is an async permission callback, so human-in-the-loop is just awaiting a future
+- Structured tool calls, so no text ReAct protocol to parse or have mangled by a redaction layer
+- The only approach that caps **both** turns and spend per run
+
+**Weaknesses:**
+- Anthropic-only — it speaks the Messages API, so it is not provider-portable like the other three
+- Cannot run on small local models; the harness needs a capable cloud model
+- Spawns the Claude Code CLI (Node) as a subprocess — an extra runtime dependency
+- Poor value on one-shot tasks where no loop runs (3, 9)
+- Largest blast radius: shell execution and filesystem writes are on by default in the code-gen case, and `cwd` does **not** sandbox them
+
+**Best for:** Use cases 2, 7, 8, 10 — agentic work with tools, delegation, or approval gates.
+
+---
+
 ## 4. Workflows vs Agents
 
-All three approaches support both patterns:
+All four approaches support both patterns:
 
 | Pattern | Definition | Routing | Example |
 |---------|-----------|---------|---------|
