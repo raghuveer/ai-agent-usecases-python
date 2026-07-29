@@ -3,7 +3,7 @@
 ## Scope & intent
 
 This repository is a **collection of reference/example applications** demonstrating
-ten LLM agent use cases across three approaches. It is intentionally **not
+ten LLM agent use cases across four approaches. It is intentionally **not
 production-hardened**: the example services ship without authentication, CORS,
 rate limiting, or TLS, and several use cases deliberately expose powerful
 capabilities (code execution, SQL execution, tool use) to illustrate the pattern.
@@ -37,7 +37,7 @@ reasonable time for a fix before any public disclosure.
 
 ## What is in scope
 
-- Issues in the example application code (`raw-api/`, `langchain/`, `langgraph/`).
+- Issues in the example application code (`raw-api/`, `langchain/`, `langgraph/`, `claude-agent-sdk/`).
 - Vulnerable pinned dependencies (see the dependency-audit section of the review).
 - Secret leakage in the repository.
 

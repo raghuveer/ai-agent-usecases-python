@@ -3,6 +3,13 @@
 **Date:** 2026-06-25 · **Version reviewed:** v0.1.0 (+ post-release hardening) ·
 **Reviewer:** Raghuveer Dendukuri with Claude Code (Opus)
 
+> **⚠️ Scope note.** §1–§10 below cover the **30** services built with raw-api /
+> langchain / langgraph. The fourth approach, **`claude-agent-sdk/`** (10 further
+> services), was added later and is reviewed in **[§11 — Addendum](#11-addendum--claude-agent-sdk-approach-2026-07-29)**.
+> Read §11 before deploying anything from that folder: it has a **materially
+> larger blast radius** than the other three (shell execution enabled by default,
+> filesystem writes, a subprocess runtime), and it raises one finding to High.
+
 This review assesses the 30 example services against **NIST** secure-development and
 GenAI guidance, the **OWASP Top 10 for LLM Applications (2025)**, and the **OWASP
 Web Application Security Top 10 (2021)**. It combines automated tooling (SAST, dependency
@@ -207,3 +214,123 @@ uvicorn app.main:app --port 8111
 docker run --rm ghcr.io/zaproxy/zaproxy zap-baseline.py -t http://host.docker.internal:8111
 docker run --rm -e BURP_START_URL=http://host.docker.internal:8111 public.ecr.aws/portswigger/dastardly
 ```
+
+---
+
+## 11. Addendum — `claude-agent-sdk` approach (2026-07-29)
+
+**Date:** 2026-07-29 · **Scope:** the 10 services in `claude-agent-sdk/` (added after
+the v0.2.0 review) · **Reviewer:** Raghuveer Dendukuri with Claude Code (Opus)
+
+This addendum covers the fourth approach only. It is kept separate rather than
+merged because the threat model genuinely differs: the other three approaches
+send messages to a model and act on the reply, whereas this one hands an agent a
+**shell, a filesystem, and a subprocess runtime**. Several controls that are
+"by-design absent" elsewhere become materially riskier here.
+
+### 11.1 Tooling run
+
+| Tool | Class | Scope | Result |
+|---|---|---|---|
+| **Bandit** 1.9.4 | Python SAST | `claude-agent-sdk/*/app` (3,955 LoC) | **0 High, 0 Medium, 1 Low** (B101 `assert`, non-security path) |
+| **pip-audit** + OSV.dev | Dependency CVE audit | resolved tree (claude-agent-sdk, fastapi, uvicorn, pydantic, pydantic-settings, anyio) | **No known vulnerabilities** |
+| Manual review | Code/threat | all 10 use cases | §11.2–§11.3 |
+| **Live agent runs** | Behavioural | UC02, UC08, UC10 against the gateway | 5 defects found — §11.4 |
+
+Bandit did **not** flag the one f-string reaching SQLite
+(`PRAGMA table_info('{table}')` in `06-sql-agent/app/db.py`) because the table
+name is validated against the real table list first. That is a deliberate,
+guarded exception, and it is unit-tested with an injection payload.
+
+### 11.2 New findings
+
+| # | Finding | Severity | Framework | Status |
+|---|---|---|---|---|
+| **F9** | **Shell execution enabled by default** in `02-code-generation` | 🔴 **High** (as shipped) | LLM05/LLM06, A03 | Documented + bounded; **not eliminated** |
+| **F10** | `cwd` does **not** confine agent file writes | 🟠 Medium | LLM06, A01 | Mitigated (prompt + read-back), not solved |
+| **F11** | Human-approval gate fails **open** on a config mistake | 🟠 Medium | LLM06 | **Fixed** + regression test |
+| **F12** | Parked HITL runs have no TTL or eviction | 🟡 Low | LLM10 | Documented; deploy-time concern |
+| **F13** | Agent runtime depends on an external CLI resolved from `PATH` | 🟡 Low | LLM03, A08 | Documented |
+
+**F9 — shell execution on by default.** This is the sharpest difference from the
+v0.2.0 review. There, arbitrary code execution existed only behind
+`RUN_CODE_CHECK=1`, **off by default** (F2). Here, `02-code-generation` grants the
+built-in `Bash` tool as its core mechanism — the agent is *supposed* to run
+`pytest`. That is remote code execution by design, as the server user, driven by
+model output which is in turn driven by untrusted request text (`POST /run`
+`{"task": ...}`). Prompt injection in that field is therefore a **command
+execution** risk, not merely a misinformation risk.
+
+It is not "fixed", because removing it removes the use case. What is applied: a
+fresh per-run temp `cwd`, an allow-list without `WebFetch`/`WebSearch`,
+`max_turns` + `max_budget_usd` caps, and explicit RCE warnings in both the module
+docstring and the README. **Anyone deploying UC02 must run it inside a
+disposable, network-isolated, resource-capped container/VM, or use the SDK's
+`sandbox` setting.** The other nine services in this folder do not grant `Bash`.
+
+**F10 — `cwd` is not a sandbox.** Confirmed empirically during live runs, not
+assumed: the `Write` tool accepts **absolute** paths, and the model repeatedly
+wrote to `/tmp/solution.py` instead of the working directory. `cwd` sets where
+the agent *starts*, not where it is *allowed*. Mitigations: the system prompt
+mandates bare relative filenames and forbids absolute paths, and artefacts are
+read back only from the workdir (so out-of-workdir writes never count as output
+and `tests_passed` stays false). Neither is a boundary — the process can still
+write anywhere its user can.
+
+**F11 — the approval gate could fail open.** In `10-hitl-approval`, listing the
+guarded tool in `allowed_tools` **auto-approves it before `can_use_tool` is
+consulted**, so the high-risk action executed with no human involvement. A
+security control silently failing open on a one-line config choice is the worst
+failure mode in this folder, and it was live-only: the mocked unit tests passed.
+Fixed (`allowed_tools=[]`; the tool is still supplied by its MCP server), covered
+by a regression test, and the SDK itself warns (`CanUseToolShadowedWarning`).
+`setting_sources=[]` is load-bearing for the same reason — allow-rules in a
+developer's `~/.claude` or the repo's `.claude/` can shadow the callback
+identically, and are **not** visible in that warning.
+
+**F12 — no eviction of parked runs.** A `/run` never resolved by `/resume` leaves
+an agent coroutine and its state resident indefinitely. There is no TTL, cap, or
+reaper, so repeated unresolved calls are a memory/task-exhaustion vector.
+Acceptable for a single-process example; production needs a timeout that denies
+and reaps. Related: the design is single-worker by construction — a parked
+coroutine cannot be resumed by another process.
+
+**F13 — external CLI dependency.** The Python SDK spawns the Claude Code CLI
+(Node) found on `PATH`, and passes the gateway credential to it via subprocess
+environment. This is a runtime dependency outside the Python dependency audit: a
+hijacked `PATH` or compromised CLI install would see the key. Pin via
+`ClaudeAgentOptions.cli_path` in hostile environments.
+
+### 11.3 Framework re-assessment (deltas only)
+
+| ID | Risk | Delta vs the other three approaches |
+|---|---|---|
+| **LLM01** Prompt Injection | 🔴 **Escalated for UC02.** Elsewhere injection is bounded by read-only tools; with `Bash` the blast radius is command execution. The other 9 services stay bounded (custom tools + validators). |
+| **LLM05** Improper Output Handling | 🔴 **Escalated (F9).** Model output is *executed by design* rather than behind a default-off flag. |
+| **LLM06** Excessive Agency | 🟠 **Highest in the repo.** Built-in filesystem/shell tools plus subagents. Counterweights: per-subagent tool allow-lists (UC07 gives `analyst`/`writer` **no** tools), an explicit permission gate (UC10), and hard turn/budget caps everywhere. |
+| **LLM10** Unbounded Consumption | 🟢 **Stronger than elsewhere.** The only approach capping **both** turns (`max_turns`) and spend (`max_budget_usd`) per run, not just `max_tokens`. F12 is the remaining gap. |
+| **LLM02** Sensitive Info Disclosure | 🟢 **Good, with a new control.** `collect()` deliberately discards `ThinkingBlock` content, so chain-of-thought never reaches API responses. Credentials travel via subprocess env and are not logged (F13 noted). |
+| **LLM03** Supply Chain | 🟢 Dependency tree clean (§11.1); F13 is the non-Python addition. |
+| **A03** Injection | 🟢 **Good.** The SQL agent keeps two independent defences (syntactic single-`SELECT` validator **plus** driver-level `mode=ro`); UC08's calculator is an AST allow-list with no `eval`, tested against `__import__` / `__subclasses__` payloads. |
+| **A08** Integrity | 🟡 F13 (CLI resolved from `PATH`). |
+
+### 11.4 Why the live runs mattered
+
+Five defects passed the mocked unit-test suite and were caught only by running
+real agents (UC02, UC08, UC10). Two were security-relevant (**F10**, **F11**);
+the rest were correctness. That is direct evidence that for agentic systems,
+mocked tests verify *your* logic but cannot verify *the agent's behaviour* — the
+gated integration tests are not optional ceremony. Full list in `TRACKING.md` →
+Live-run findings.
+
+### 11.5 Deployment checklist (in addition to §7)
+
+- **Never expose `02-code-generation` without a real sandbox** — container/VM, no
+  network, CPU/memory/PID caps, non-root, read-only root filesystem (F9).
+- **Do not add the guarded tool to `allowed_tools`** in UC10, and keep
+  `setting_sources=[]` so local settings cannot shadow the gate (F11).
+- **Add a TTL/reaper for parked approvals**, and run UC10 as a **single worker** (F12).
+- **Pin `cli_path`** and control `PATH` where the runtime is untrusted (F13).
+- **Treat `cwd` as ergonomics, not isolation** (F10).
+- Keep the per-run `max_turns` / `max_budget_usd` caps — they are the only thing
+  bounding an agent loop's cost and runtime.

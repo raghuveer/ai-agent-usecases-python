@@ -15,6 +15,8 @@ Ten common agent use cases, each implemented **four ways** — direct **Raw API*
 
 > **Status — v0.3.0:** all 10 use cases built across all 4 approaches (40 projects + a `_template/` per approach), each with offline, mocked **unit tests** and gated **integration tests**. The `claude-agent-sdk/` approach is the newest addition — **131 offline unit tests green**, with UC02, UC08 and UC10 additionally **verified live** against the gateway. That live run caught five bugs the mocked tests could not see (permission-gate shadowing, streaming-mode input, cap handling, and `cwd` not being a sandbox) — all fixed, each with a regression test. See `TRACKING.md` → Live-run findings. **Security-reviewed** against NIST · OWASP LLM Top 10 · OWASP Web Top 10 (see [`docs/security-review.md`](docs/security-review.md) / [`SECURITY.md`](SECURITY.md)); dependencies patched to current majors, with a CI `pip-audit` gate and Dependabot keeping them current. Examples optimise for clarity of the approach, not production hardening.
 
+> 🔴 **Read [`docs/security-review.md` §11](docs/security-review.md) before deploying anything from `claude-agent-sdk/`.** That approach has a materially larger blast radius than the other three: `02-code-generation` grants the agent a **shell by default** (remote code execution by design, driven by untrusted request text), and `cwd` was empirically shown **not** to confine file writes. Bandit and pip-audit are clean on it (0 High/Medium, no known CVEs), but F9 is rated **High as shipped** and needs a real sandbox — container/VM, no network, resource caps.
+
 ## Use-case matrix
 
 | # | Use case | raw-api | langchain | langgraph | claude-agent-sdk | Runtime model |
