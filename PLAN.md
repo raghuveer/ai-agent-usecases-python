@@ -1,6 +1,6 @@
 # Build Plan
 
-Sequenced delivery of the 30 examples. Governed by `SPEC.md`; status tracked in `TRACKING.md`.
+Sequenced delivery of the 40 examples. Governed by `SPEC.md`; status tracked in `TRACKING.md`.
 
 ## Phase 0 — Foundations (do once, before any use case)
 1. **Repo skeleton:** create `raw-api/`, `langchain/`, `langgraph/` use-case subfolders (`01-rag` … `10-hitl`). Add root `README.md` (overview + the approach-comparison table from the guide), `LICENSE`, `.gitignore` (`.env`, `__pycache__`, vectorstores, `*.db`).
@@ -41,6 +41,21 @@ Each use case maps to one AIUP **phase** (an engagement) under the **project** `
 
 Phases provisioned (one key each): uc01-rag, uc02-codegen, uc03-extraction, uc04-research, uc05-triage, uc06-sql, uc07-multiagent, uc08-react, uc09-recommendations, uc10-hitl — all 10.
 
+## Phase 6 — 4th approach: `claude-agent-sdk` (2026-07-29)
+
+Added the Python **Claude Agent SDK** (`claude-agent-sdk`) as a fourth approach, all 10 use cases.
+
+Build order (hardest-first, to de-risk the shared seam early):
+1. `_template` — established the three reusable pieces: `sdk_env()` config translation, the injectable `Runner` seam, and `build_options()` budget discipline. Validated before replicating.
+2. **UC10 HITL** first — the hardest pattern (park/resume through `can_use_tool`). Building it first surfaced that a parked coroutine needs one long-lived event loop, which shaped both the design and the tests.
+3. Remaining showcases: UC02 code-gen, UC07 multi-agent, UC08 ReAct.
+4. The other six: UC01, UC03, UC04, UC05, UC06, UC09.
+
+Working rules that differ from Phases 0–5:
+- **No free-local fallback.** Unlike the other three approaches, every project here defaults to a cloud model; `max_turns` + `max_budget_usd` are mandatory on every run, and all integration tests are double-gated (`RUN_INTEGRATION=1` + `RUN_ANTHROPIC_TESTS=1`).
+- **Mock at the runner, not the client.** `query()` spawns the Claude Code CLI, so unit tests inject a `runner` stub; `collect()` is tested separately against real SDK message types.
+- **Node.js + Claude Code CLI** are a live-run prerequisite (the Python SDK spawns the CLI). Unit tests need neither, so CI is unaffected.
+
 ## Current state
 - **Phase 0** — per-approach `_template/` built; 30 folders scaffolded; root docs in place. ✅
 - **Phase 1** — UC1 RAG trio built + unit/integration green on free local Qwen. ✅
@@ -49,5 +64,12 @@ Phases provisioned (one key each): uc01-rag, uc02-codegen, uc03-extraction, uc04
   - **UC3 uses `claude-haiku-4-5`** — local models proved too unreliable for strict invoice JSON (the apparent "PII guardrail" was weak-model output, not redaction). Integration test marked `anthropic` (small capped spend); unit tests stay mocked/offline.
 - **Phase 3** — UC4 research, UC8 ReAct built across all three approaches; unit green, integration green. Both default to `claude-haiku-4-5` (free local can't drive a text ReAct loop). ✅
 - **Phase 4** — UC7 multi-agent (Haiku), UC10 HITL (free local) built across all three; unit + integration green. raw-api/07 and raw-api/10 carry "why impractical here" notes pointing to their langgraph siblings. ✅
-- **ALL 10 use cases × 3 approaches = 30 projects complete.**
-- **Remaining: Phase 5 (release)** — root README navigable matrix, a CI workflow running unit tests only (no network) across all projects, final per-folder README pass, `git init` + first commit + push.
+- **Phase 5** — released as v0.2.0: navigable root README, CI running unit tests only, per-folder READMEs, security review, dependency gates. ✅
+- **Phase 6** — `claude-agent-sdk` × 10 use cases built; **131 offline unit tests green**; 14 integration tests written, collecting, and gated. ✅
+- **Phase 6b — live validation** (2026-07-29): fresh `sk-aiup-…` key minted under phase `poc-ai-usecases-agentsdk`; **UC02, UC08, UC10 run live and passing**. The run exposed five defects invisible to mocked tests (see `TRACKING.md` → Live-run findings); all fixed with regression tests, and the turn/budget defaults re-baselined from measured cost. ✅
+- **ALL 10 use cases × 4 approaches = 40 projects complete.**
+
+### Notes for whoever runs this next
+- **Minting keys now needs MFA.** `seed-virtual-keys.mjs` predates ADR 0042: a bare login returns a `token_use: mfa_pending` token (300s TTL) with no roles, so project creation 403s with "admin role required". Complete the step-up at `POST /v1/auth/mfa/verify` with `{"factorType": "...", "code": "..."}` before driving projects-ms.
+- **Re-point the 30 older projects** at `:8094` and the unsuffixed model aliases — their `.env.example` still names the retired `:8080` (see `TRACKING.md` → Platform drift). Not yet done.
+- **Live-run the remaining seven** `claude-agent-sdk` integration tests (UC01, 03, 04, 05, 06, 07, 09). Budget ~$0.3–0.5 each through the gateway.

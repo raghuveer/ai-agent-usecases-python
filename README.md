@@ -1,4 +1,4 @@
-# AI Agent Use Cases — Raw API · LangChain · LangGraph
+# AI Agent Use Cases — Raw API · LangChain · LangGraph · Claude Agent SDK
 
 [![unit-tests](https://github.com/raghuveer/ai-agent-usecases-python/actions/workflows/ci.yml/badge.svg)](https://github.com/raghuveer/ai-agent-usecases-python/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/raghuveer/ai-agent-usecases-python?label=release)](https://github.com/raghuveer/ai-agent-usecases-python/releases)
@@ -7,44 +7,70 @@
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![python](https://img.shields.io/badge/python-3.12-blue)](#)
 
-> Ten common LLM agent use cases — RAG, code-gen, data extraction, research, support triage, SQL, multi-agent, ReAct, recommendations, human-in-the-loop — each implemented three ways: **raw API**, **LangChain**, and **LangGraph**. Python + FastAPI, with unit & integration tests. A practical side-by-side of the three approaches.
+> Ten common LLM agent use cases — RAG, code-gen, data extraction, research, support triage, SQL, multi-agent, ReAct, recommendations, human-in-the-loop — each implemented four ways: **raw API**, **LangChain**, **LangGraph**, and the **Claude Agent SDK**. Python + FastAPI, with unit & integration tests. A practical side-by-side of the four approaches.
 
-Ten common agent use cases, each implemented **three ways** — direct **Raw API**, **LangChain**, and **LangGraph** — in **Python + FastAPI**. The point is to *compare* the approaches on the same problems. Every folder is a self-contained, runnable project with its own tests.
+Ten common agent use cases, each implemented **four ways** — direct **Raw API**, **LangChain**, **LangGraph**, and the **Claude Agent SDK** — in **Python + FastAPI**. The point is to *compare* the approaches on the same problems. Every folder is a self-contained, runnable project with its own tests.
 
 **Other languages:** a TypeScript edition (LangChain.js + LangGraph.js) is planned at `ai-agent-usecases-typescript` _(coming soon)_.
 
-> **Status — v0.2.0:** all 10 use cases built across all 3 approaches (30 projects + a `_template/` per approach), each with offline, mocked **unit tests** and gated **integration tests**. **Security-reviewed** against NIST · OWASP LLM Top 10 · OWASP Web Top 10 (see [`docs/security-review.md`](docs/security-review.md) / [`SECURITY.md`](SECURITY.md)); dependencies patched to current majors, with a CI `pip-audit` gate and Dependabot keeping them current. Examples optimise for clarity of the approach, not production hardening.
+> **Status — v0.3.0:** all 10 use cases built across all 4 approaches (40 projects + a `_template/` per approach), each with offline, mocked **unit tests** and gated **integration tests**. The `claude-agent-sdk/` approach is the newest addition — **131 offline unit tests green**, with UC02, UC08 and UC10 additionally **verified live** against the gateway. That live run caught five bugs the mocked tests could not see (permission-gate shadowing, streaming-mode input, cap handling, and `cwd` not being a sandbox) — all fixed, each with a regression test. See `TRACKING.md` → Live-run findings. **Security-reviewed** against NIST · OWASP LLM Top 10 · OWASP Web Top 10 (see [`docs/security-review.md`](docs/security-review.md) / [`SECURITY.md`](SECURITY.md)); dependencies patched to current majors, with a CI `pip-audit` gate and Dependabot keeping them current. Examples optimise for clarity of the approach, not production hardening.
 
 ## Use-case matrix
 
-| # | Use case | raw-api | langchain | langgraph | Runtime model |
-|---|----------|:-------:|:---------:|:---------:|---------------|
-| 1 | Q&A / RAG chatbot | [▸](raw-api/01-rag) | [▸](langchain/01-rag) | [▸](langgraph/01-rag) | local Qwen |
-| 2 | Code generation | [▸](raw-api/02-code-generation) | [▸](langchain/02-code-generation) | [▸](langgraph/02-code-generation) | local Qwen (coder) |
-| 3 | Data extraction | [▸](raw-api/03-data-extraction) | [▸](langchain/03-data-extraction) | [▸](langgraph/03-data-extraction) | Haiku¹ |
-| 4 | Research agent | [▸](raw-api/04-research-agent) | [▸](langchain/04-research-agent) | [▸](langgraph/04-research-agent) | Haiku¹ |
-| 5 | Customer support triage | [▸](raw-api/05-support-triage) | [▸](langchain/05-support-triage) | [▸](langgraph/05-support-triage) | local Qwen |
-| 6 | SQL / DB agent | [▸](raw-api/06-sql-agent) | [▸](langchain/06-sql-agent) | [▸](langgraph/06-sql-agent) | local Qwen (coder) |
-| 7 | Multi-agent orchestration | [▸](raw-api/07-multi-agent) | [▸](langchain/07-multi-agent) | [▸](langgraph/07-multi-agent) | Haiku¹ |
-| 8 | Autonomous ReAct | [▸](raw-api/08-autonomous-react) | [▸](langchain/08-autonomous-react) | [▸](langgraph/08-autonomous-react) | Haiku¹ |
-| 9 | Recommendations | [▸](raw-api/09-recommendations) | [▸](langchain/09-recommendations) | [▸](langgraph/09-recommendations) | local Qwen |
-| 10 | Human-in-the-loop approval | [▸](raw-api/10-hitl-approval) | [▸](langchain/10-hitl-approval) | [▸](langgraph/10-hitl-approval) | local Qwen |
+| # | Use case | raw-api | langchain | langgraph | claude-agent-sdk | Runtime model |
+|---|----------|:-------:|:---------:|:---------:|:----------------:|---------------|
+| 1 | Q&A / RAG chatbot | [▸](raw-api/01-rag) | [▸](langchain/01-rag) | [▸](langgraph/01-rag) | [▸](claude-agent-sdk/01-rag) | local Qwen · Haiku² |
+| 2 | Code generation | [▸](raw-api/02-code-generation) | [▸](langchain/02-code-generation) | [▸](langgraph/02-code-generation) | [★](claude-agent-sdk/02-code-generation) | local Qwen (coder) · Haiku² |
+| 3 | Data extraction | [▸](raw-api/03-data-extraction) | [▸](langchain/03-data-extraction) | [▸](langgraph/03-data-extraction) | [▸](claude-agent-sdk/03-data-extraction) | Haiku¹ |
+| 4 | Research agent | [▸](raw-api/04-research-agent) | [▸](langchain/04-research-agent) | [▸](langgraph/04-research-agent) | [▸](claude-agent-sdk/04-research-agent) | Haiku¹ |
+| 5 | Customer support triage | [▸](raw-api/05-support-triage) | [▸](langchain/05-support-triage) | [▸](langgraph/05-support-triage) | [▸](claude-agent-sdk/05-support-triage) | local Qwen · Haiku² |
+| 6 | SQL / DB agent | [▸](raw-api/06-sql-agent) | [▸](langchain/06-sql-agent) | [▸](langgraph/06-sql-agent) | [▸](claude-agent-sdk/06-sql-agent) | local Qwen (coder) · Haiku² |
+| 7 | Multi-agent orchestration | [▸](raw-api/07-multi-agent) | [▸](langchain/07-multi-agent) | [▸](langgraph/07-multi-agent) | [★](claude-agent-sdk/07-multi-agent) | Haiku¹ |
+| 8 | Autonomous ReAct | [▸](raw-api/08-autonomous-react) | [▸](langchain/08-autonomous-react) | [▸](langgraph/08-autonomous-react) | [★](claude-agent-sdk/08-autonomous-react) | Haiku¹ |
+| 9 | Recommendations | [▸](raw-api/09-recommendations) | [▸](langchain/09-recommendations) | [▸](langgraph/09-recommendations) | [▸](claude-agent-sdk/09-recommendations) | local Qwen · Haiku² |
+| 10 | Human-in-the-loop approval | [▸](raw-api/10-hitl-approval) | [▸](langchain/10-hitl-approval) | [▸](langgraph/10-hitl-approval) | [★](claude-agent-sdk/10-hitl-approval) | local Qwen · Haiku² |
 
-¹ **Why Haiku for 3, 4, 7, 8?** Building these we found small local models can't reliably emit strict schema JSON (extraction) or drive a multi-step text **ReAct** loop (research / ReAct / multi-agent) — they wandered into prose and skipped tools. Those four default to `claude-haiku-4-5`; the rest run on free self-hosted Qwen. See `TRACKING.md` for the full feasibility matrix and `SPEC.md` for the cost rules.
+★ = showcase for that approach.
+
+¹ **Why Haiku for 3, 4, 7, 8?** Building these we found small local models can't reliably emit strict schema JSON (extraction) or drive a multi-step text **ReAct** loop (research / ReAct / multi-agent) — they wandered into prose and skipped tools. Those four default to a cloud model; the rest run on free self-hosted Qwen. See `TRACKING.md` for the full feasibility matrix and `SPEC.md` for the cost rules.
+
+² **The `claude-agent-sdk` column always uses a cloud model**, even for the six use cases the other approaches run free on local Qwen. That is not a preference — the SDK drives the Claude Code harness (large system prompt + built-in tool loop), which small local models cannot sustain. Budget your runs accordingly: every project caps `AGENT_MAX_TURNS` and `AGENT_MAX_BUDGET_USD`.
+
+> **Measured cost, so you can plan.** Prompt caching does **not** pass through the local gateway (`cache_read_input_tokens: 0`), so every agent turn re-pays the full harness prompt. A 9–10 turn code-generation run on `claude-haiku` cost **$0.35–0.48**. Defaults are `AGENT_MAX_TURNS=12` / `AGENT_MAX_BUDGET_USD=1.00`; an earlier `$0.25` cap was exhausted in 15 seconds. Going direct to `api.anthropic.com` (drop `LLM_BASE_URL`) restores caching and costs materially less.
 
 Which approach suits which use case (and the two raw-api combos deliberately kept minimal — multi-agent and HITL — with "why impractical here" notes) is tracked in **`TRACKING.md`**.
 
+## The four approaches at a glance
+
+| | You write | Best at | Weakest at |
+|---|---|---|---|
+| **raw-api** | every byte sent to the model, the loop, the memory | seeing exactly what happens | coordination-heavy work (7, 10 are minimal + "impractical here" notes) |
+| **langchain** | chains, retrievers, tool wrappers | fast linear prototypes | cycles and conditional routing |
+| **langgraph** | a typed state graph | cycles, conditional edges, **durable** pause/resume | flat one-shot tasks (structural cost with no payoff) |
+| **claude-agent-sdk** | tools + a prompt; the SDK owns the loop | agentic work — built-in file/shell tools, subagents, permission gates | one-shot tasks (3, 9) where no loop is needed, and anything needing free local models |
+
+**Where the Agent SDK genuinely wins** (its four ★ showcases):
+
+- **02 code-generation** — built-in `Write`/`Bash` mean the agent writes code, writes tests, *runs* them, and fixes failures. There is no loop in the repo.
+- **07 multi-agent** — subagents are a dict of `AgentDefinition`s, each with its **own context and tool allow-list**. Least privilege per role, declared as data.
+- **08 autonomous-react** — the SDK *is* the ReAct loop. No `Thought:`/`Action:` parser, no `stop=["Observation:"]`, and immune to the PII-redaction bug that broke text-ReAct parsing (see `TRACKING.md`).
+- **10 hitl-approval** — `can_use_tool` is an async callback, so "ask a human" is just awaiting a future. The agent parks itself mid-run. *But* the paused state is a live coroutine — single process, lost on restart. For durable approvals, `langgraph/10`'s checkpointer still wins.
+
 ## How models are accessed
 
-Every example speaks **OpenAI-compatible HTTP** to a gateway — no provider is hardcoded. Configure via env; each project ships a `.env.example`:
+No provider is hardcoded anywhere — configure via env; each project ships a `.env.example`. The three original approaches speak the **OpenAI** surface; `claude-agent-sdk` speaks the **Anthropic** surface, which changes two things:
 
-| Var | Example | Meaning |
+| Var | raw-api / langchain / langgraph | claude-agent-sdk |
 |---|---|---|
-| `LLM_BASE_URL` | `http://localhost:8080/v1` | OpenAI-compatible gateway base URL |
-| `LLM_GATEWAY_KEY` | `sk-…` | `Authorization: Bearer` virtual key |
-| `LLM_MODEL` | `qwen-local-instruct` / `qwen-local-coder` / `claude-haiku-4-5` | allow-listed model alias |
+| `LLM_BASE_URL` | `http://localhost:8094/v1` | `http://localhost:8094` — **no `/v1`** (the SDK appends `/v1/messages`) |
+| `LLM_GATEWAY_KEY` | `sk-aiup-…` virtual key | same key, but exported as `ANTHROPIC_AUTH_TOKEN` |
+| `LLM_MODEL` | `qwen-local-instruct` · `qwen-local-coder` · `claude-haiku` | `claude-haiku` · `claude-sonnet` (no local aliases — see ² above) |
 
 Copy `.env.example` → `.env` (gitignored) and fill in your key. The `.env` is **never committed**; only `.env.example` is.
+
+> **Auth gotcha (claude-agent-sdk):** the gateway requires `Authorization: Bearer` and rejects `x-api-key`. The SDK sends `Bearer` only when `ANTHROPIC_AUTH_TOKEN` is set — setting `ANTHROPIC_API_KEY` instead produces a 401. Each project's `app/agent.py` sets the right one.
+
+> ⚠️ **Platform moved.** The AI Utility Platform gateway now listens on **`:8094`**, and the LiteLLM tier has been removed (ADR 0036) — `projects-ms` mints native `sk-aiup-…` virtual keys directly, and model aliases dropped their version suffixes (`claude-haiku`, not `claude-haiku-4-5`). The `claude-agent-sdk/` projects target this. **The 30 older projects still ship `.env.example` pointing at the retired `:8080` with the old aliases** — update `LLM_BASE_URL` and `LLM_MODEL` in your local `.env` before running their integration tests.
 
 ## Use a different model or provider
 
@@ -52,11 +78,13 @@ Nothing is hardcoded to a provider — every project speaks **OpenAI-compatible 
 
 | To use… | `LLM_BASE_URL` | `LLM_MODEL` | Notes |
 |---|---|---|---|
-| Bundled gateway (default) | `http://localhost:8080/v1` | `qwen-local-instruct` · `claude-haiku-4-5` | virtual key in `LLM_GATEWAY_KEY` |
+| Bundled gateway (default) | `http://localhost:8094/v1` | `qwen-local-instruct` · `claude-haiku` | virtual key in `LLM_GATEWAY_KEY` |
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` | `LLM_GATEWAY_KEY` = your OpenAI key |
 | Ollama (direct, local) | `http://localhost:11434/v1` | `qwen2.5:7b-instruct` | any non-empty key works |
 | Together · Groq · OpenRouter · Azure OpenAI | their `/v1` URL | their model id | all OpenAI-compatible |
-| Anthropic · Bedrock · Vertex | a LiteLLM proxy `/v1` | the proxy's alias | LiteLLM normalises these onto the OpenAI surface |
+| Anthropic · Bedrock · Vertex | an OpenAI-compatible proxy `/v1` | the proxy's alias | the proxy normalises these onto the OpenAI surface |
+
+**This table applies to the three OpenAI-surface approaches.** `claude-agent-sdk` is not provider-portable in the same way: it speaks the Anthropic Messages API, so it runs against the bundled gateway, `api.anthropic.com` directly (drop `LLM_BASE_URL`), or Bedrock/Vertex via the SDK's own env vars — but not against OpenAI or a bare Ollama. That is a real limitation of the approach, not of the wiring.
 
 **Tuning knobs** (also env, also no code change): `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`.
 
@@ -71,7 +99,7 @@ Two caveats that are about the *model*, not the code:
 Each project is independent and uses [`uv`](https://docs.astral.sh/uv/):
 
 ```bash
-cd raw-api/01-rag                 # pick any of the 30
+cd raw-api/01-rag                 # pick any of the 40
 cp .env.example .env              # then edit .env: set LLM_GATEWAY_KEY (and LLM_MODEL if needed)
 
 uv venv
@@ -95,12 +123,19 @@ uv run uvicorn app.main:app --reload
 - **Unit tests** — the LLM is mocked; fully offline; these run in CI.
 - **Integration tests** — call the live gateway; gated behind `RUN_INTEGRATION=1`. The four Haiku use cases also mark theirs `anthropic` since they spend a small, capped budget.
 
-CI (`.github/workflows/ci.yml`) runs the **unit tests only** across all projects on every push/PR — no network to any model, no keys required.
+For `claude-agent-sdk`, the mocking seam is a **`runner` callable** injected into `create_app()` instead of an LLM client — `query()` spawns the Claude Code CLI, which unit tests must never do. The message-parsing layer (`collect()`) is tested separately against **real** `AssistantMessage`/`ResultMessage` objects, so parsing is still verified against the types the CLI actually emits. All of its integration tests are double-gated (`RUN_INTEGRATION=1` **and** `RUN_ANTHROPIC_TESTS=1`), because that approach has no free-local fallback.
+
+CI (`.github/workflows/ci.yml`) runs the **unit tests only** across all projects on every push/PR — no network to any model, no keys, and no Node/CLI required.
+
+### Extra prerequisite for `claude-agent-sdk` only
+
+Live runs need **Node.js 18+ and the Claude Code CLI on PATH**: the Python SDK spawns the CLI as a subprocess. This is inherent to the SDK, not a choice made here — the app code is 100% Python. Unit tests need neither.
 
 ## Docs
 
-- `agent-development-guide.md` — the 10 use cases, the three approaches, scalability, language support.
-- `SPEC.md` — project contract, model strategy, testing & cost rules.
+- `agent-development-guide.md` — the 10 use cases, the original three approaches, scalability, language support. (Predates the Agent SDK addition; see `SPEC.md` §7 for those deltas.)
+- `SPEC.md` — project contract, model strategy, testing & cost rules; **§7** covers the `claude-agent-sdk` per-use-case deltas.
+- `claude-agent-sdk/_template/README.md` — how this approach is wired: config translation, the `runner` injection seam, and budget discipline.
 - `PLAN.md` — phased build order and final status.
 - `TRACKING.md` — feasibility matrix & per-cell build status.
 - `SECURITY.md` — disclosure policy & scope.

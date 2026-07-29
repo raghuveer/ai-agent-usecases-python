@@ -21,7 +21,7 @@ jobs:
       - id: find
         # Every directory containing tests/test_unit.py becomes a matrix entry.
         run: |
-          projects=$(find raw-api langchain langgraph -type f -path '*/tests/test_unit.py' \
+          projects=$(find raw-api langchain langgraph claude-agent-sdk -type f -path '*/tests/test_unit.py' \
             -printf '%h\n' | sed 's#/tests$##' | sort | jq -R . | jq -cs .)
           echo "projects=$projects" >> "$GITHUB_OUTPUT"
           echo "Discovered projects:"; echo "$projects" | jq .

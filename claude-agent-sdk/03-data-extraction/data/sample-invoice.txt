@@ -1,0 +1,18 @@
+NORTHWIND TRADERS
+44 Harbour Road, Bristol, BS1 5TY
+
+INVOICE
+
+Invoice No:   INV-2026-0042
+Date:         14 March 2026
+Bill To:      Contoso Ltd, 9 Ely Place, London
+
+------------------------------------------------------------
+Description                                          Amount
+------------------------------------------------------------
+Consulting services, March 2026                   $1,200.00
+Shipping and handling                                $84.50
+------------------------------------------------------------
+                                        TOTAL DUE  $1,284.50
+
+Payment terms: net 30. Please quote the invoice number.

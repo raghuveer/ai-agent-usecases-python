@@ -1,0 +1,32 @@
+[project]
+name = "claude-agent-sdk-05-support-triage"
+version = "0.1.0"
+description = "UC05 support triage: the agent classifies, decides for itself whether to enrich from the order system, and emits a validated decision."
+requires-python = ">=3.12"
+dependencies = [
+    "claude-agent-sdk>=0.2.128,<0.3",
+    "fastapi>=0.116,<1",
+    "uvicorn>=0.32,<0.35",
+    "pydantic>=2.9,<3",
+    "pydantic-settings>=2.5,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0.3,<10",
+    "httpx>=0.27,<0.29",
+    "anyio>=4.4,<6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: spawns a real agent loop via the gateway (gated by RUN_INTEGRATION=1)",
+    "anthropic: requires Anthropic models (gated by RUN_ANTHROPIC_TESTS=1)",
+]
