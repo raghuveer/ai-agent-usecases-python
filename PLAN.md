@@ -37,9 +37,9 @@ Batch the ones that run well on local Qwen, all three approaches each:
 - **Packaging:** **`pyproject.toml` + `uv`** for every project.
 
 ## Platform provisioning convention (project / phase / key)
-Each use case maps to one AIUP **phase** (an engagement) under the **project** `ai-usecases` (org `acme-corp`). A single **virtual key** per phase — alias `enterprise_architect-poc-ai-usecases-uc<NN>-<slug>` — is reused by that use case's raw-api/langchain/langgraph integration tests. Key values live only in each project's gitignored `.env`. Apps call the gateway with an allow-listed alias: `qwen-local-instruct` (free default) / `qwen-local-coder` (free, code) / `claude-haiku-4-5` (budget). Seeding commands and ids: see memory `aiup-usecases-provisioning`.
+Each use case maps to one AIUP **phase** (an engagement) under the **project** `ai-usecases` (org `acme-corp`). A single **virtual key** per phase — alias `enterprise_architect-poc-ai-usecases-uc<NN>-<slug>` — is reused by that use case's raw-api/langchain/langgraph integration tests. Key values live only in each project's gitignored `.env`. Apps call the gateway with an allow-listed alias: `qwen-local-instruct` (free default) / `qwen-local-coder` (free, code) / `claude-haiku` (budget). Seeding commands and ids: see memory `aiup-usecases-provisioning`.
 
-Phases provisioned (one key each): uc01-rag, uc02-codegen, uc03-extraction, uc04-research, uc05-triage, uc06-sql, uc07-multiagent, uc08-react, uc09-recommendations, uc10-hitl — all 10.
+Phases provisioned (one key each): uc01-rag … uc10-hitl — all 10. **Superseded 2026-07-29:** the platform rebuild wiped the `ai-usecases` project and every one of those keys. A single phase `poc-ai-usecases-agentsdk` was recreated with one key (aliases `claude-haiku`, `claude-sonnet`, `qwen-local-instruct`, `qwen-local-coder`) and is currently shared by all 40 projects. Re-provisioning per-use-case phases is a tidy-up task, not a blocker.
 
 ## Phase 6 — 4th approach: `claude-agent-sdk` (2026-07-29)
 
@@ -71,4 +71,4 @@ Working rules that differ from Phases 0–5:
 
 ### Notes for whoever runs this next
 - **Minting keys now needs MFA.** `seed-virtual-keys.mjs` predates ADR 0042: a bare login returns a `token_use: mfa_pending` token (300s TTL) with no roles, so project creation 403s with "admin role required". Complete the step-up at `POST /v1/auth/mfa/verify` with `{"factorType": "...", "code": "..."}` before driving projects-ms.
-- **Re-point the 30 older projects** at `:8094` and the unsuffixed model aliases — their `.env.example` still names the retired `:8080` (see `TRACKING.md` → Platform drift). Not yet done.
+- ~~Re-point the 30 older projects~~ — **done 2026-07-29**: 66 files swept to `:8094` + unsuffixed aliases, all 30 `.env` re-keyed, live-verified across all three approaches (350 offline tests green). See `TRACKING.md` → Platform drift.

@@ -72,7 +72,7 @@ Copy `.env.example` → `.env` (gitignored) and fill in your key. The `.env` is 
 
 > **Auth gotcha (claude-agent-sdk):** the gateway requires `Authorization: Bearer` and rejects `x-api-key`. The SDK sends `Bearer` only when `ANTHROPIC_AUTH_TOKEN` is set — setting `ANTHROPIC_API_KEY` instead produces a 401. Each project's `app/agent.py` sets the right one.
 
-> ⚠️ **Platform moved.** The AI Utility Platform gateway now listens on **`:8094`**, and the LiteLLM tier has been removed (ADR 0036) — `projects-ms` mints native `sk-aiup-…` virtual keys directly, and model aliases dropped their version suffixes (`claude-haiku`, not `claude-haiku-4-5`). The `claude-agent-sdk/` projects target this. **The 30 older projects still ship `.env.example` pointing at the retired `:8080` with the old aliases** — update `LLM_BASE_URL` and `LLM_MODEL` in your local `.env` before running their integration tests.
+> ℹ️ **Platform note.** The AI Utility Platform gateway listens on **`:8094`**, and the LiteLLM tier has been removed (ADR 0036) — `projects-ms` mints native `sk-aiup-…` virtual keys directly, and model aliases carry no version suffix (`claude-haiku`, not `claude-haiku-4-5`). **All 40 projects target this**; the older 30 were migrated on 2026-07-29 and re-verified live across all three approaches.
 
 ## Use a different model or provider
 

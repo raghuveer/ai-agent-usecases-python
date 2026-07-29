@@ -16,13 +16,13 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
-    llm_base_url: str = "http://localhost:8080/v1"
+    llm_base_url: str = "http://localhost:8094/v1"
     llm_gateway_key: str = "replace-with-platform-virtual-key"
     # Default to the budget Anthropic model. The free local Qwen could not
     # reliably drive the multi-step text ReAct loop (it emitted prose instead of
     # the Action/Action Input protocol and used outside knowledge), so per the
-    # build spec's fallback rule this use case switches to claude-haiku-4-5.
-    llm_model: str = "claude-haiku-4-5"  # gateway alias (budget Anthropic)
+    # build spec's fallback rule this use case switches to claude-haiku.
+    llm_model: str = "claude-haiku"  # gateway alias (budget Anthropic)
     # Generation params (override via LLM_TEMPERATURE / LLM_MAX_TOKENS).
     llm_temperature: float = 0.0
     llm_max_tokens: int = 512  # primary generation budget for this use case

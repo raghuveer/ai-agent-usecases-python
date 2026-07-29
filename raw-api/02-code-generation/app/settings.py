@@ -16,7 +16,7 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
-    llm_base_url: str = "http://localhost:8080/v1"
+    llm_base_url: str = "http://localhost:8094/v1"
     llm_gateway_key: str = "replace-with-platform-virtual-key"
     llm_model: str = "qwen-local-coder"  # gateway alias (free local Qwen coder)
     # Generation params (override via LLM_TEMPERATURE / LLM_MAX_TOKENS).

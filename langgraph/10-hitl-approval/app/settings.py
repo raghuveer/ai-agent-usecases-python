@@ -15,7 +15,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    llm_base_url: str = "http://localhost:8080/v1"
+    llm_base_url: str = "http://localhost:8094/v1"
     llm_gateway_key: str = "replace-with-platform-virtual-key"
     llm_model: str = "qwen-local-instruct"  # gateway alias (free local Qwen)
     llm_temperature: float = 0.0

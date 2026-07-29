@@ -17,9 +17,9 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
-    llm_base_url: str = "http://localhost:8080/v1"
+    llm_base_url: str = "http://localhost:8094/v1"
     llm_gateway_key: str = "replace-with-platform-virtual-key"
-    llm_model: str = "claude-haiku-4-5"  # UC3: local Qwen too weak for reliable JSON; use Haiku
+    llm_model: str = "claude-haiku"  # UC3: local Qwen too weak for reliable JSON; use Haiku
     llm_temperature: float = 0.0  # deterministic by default
     llm_max_tokens: int = 512  # primary generation budget (was hardcoded at call site)
     # Structured-output strategy: "text" (prompt JSON + parse, portable default)

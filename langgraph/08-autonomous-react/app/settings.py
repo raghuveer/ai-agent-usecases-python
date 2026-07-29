@@ -15,10 +15,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    llm_base_url: str = "http://localhost:8080/v1"
+    llm_base_url: str = "http://localhost:8094/v1"
     llm_gateway_key: str = "replace-with-platform-virtual-key"
     # UC8: the two-tool ReAct chain is too unreliable on local Qwen; use Haiku.
-    llm_model: str = "claude-haiku-4-5"
+    llm_model: str = "claude-haiku"
     llm_temperature: float = 0.0
     llm_max_tokens: int = 384
     max_steps: int = 6  # default cap on ReAct loop iterations

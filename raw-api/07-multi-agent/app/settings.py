@@ -16,11 +16,11 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
-    llm_base_url: str = "http://localhost:8080/v1"
+    llm_base_url: str = "http://localhost:8094/v1"
     llm_gateway_key: str = "replace-with-platform-virtual-key"
     # UC7: the orchestrator → researcher → writer → reviewer chain needs reliable
     # role-following the free local Qwen can't give; use Haiku.
-    llm_model: str = "claude-haiku-4-5"
+    llm_model: str = "claude-haiku"
     # Generation params (override via LLM_TEMPERATURE / LLM_MAX_TOKENS).
     llm_temperature: float = 0.0
     llm_max_tokens: int = 400  # primary generation budget for this use case
