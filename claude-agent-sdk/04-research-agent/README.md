@@ -55,8 +55,8 @@ findings.
 | `LLM_GATEWAY_KEY` | placeholder | virtual key, sent as `Authorization: Bearer` |
 | `LLM_MODEL` | `claude-haiku` | `claude-sonnet` for harder questions |
 | `RESEARCH_ALLOW_WEB` | `0` | `1` enables the built-in web tools |
-| `AGENT_MAX_TURNS` | `6` | raised to ≥8: research is iterative |
-| `AGENT_MAX_BUDGET_USD` | `0.25` | hard spend cap per run |
+| `AGENT_MAX_TURNS` | `12` | raised to ≥8: research is iterative |
+| `AGENT_MAX_BUDGET_USD` | `1.00` | hard spend cap per run |
 | `AGENT_EFFORT` | `low` | raise for harder questions |
 
 ## Prerequisites

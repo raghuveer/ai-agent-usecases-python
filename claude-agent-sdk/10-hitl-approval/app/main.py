@@ -20,6 +20,7 @@ from .agent import Runner, build_options
 from .approval import (
     GUARDED_TOOL,
     ApprovalRegistry,
+    RegistryFull,
     build_approval_server,
     make_gate,
     resolve_run,
@@ -67,7 +68,10 @@ def create_app(runner: Runner | None = None) -> FastAPI:
 
     app.state.settings = settings
     app.state.runner = runner
-    app.state.registry = ApprovalRegistry()
+    app.state.registry = ApprovalRegistry(
+        ttl_seconds=settings.approval_ttl_seconds,
+        max_pending=settings.approval_max_pending,
+    )
 
     @app.get("/health")
     def health() -> dict:
@@ -76,7 +80,11 @@ def create_app(runner: Runner | None = None) -> FastAPI:
     @app.post("/run", response_model=RunResponse)
     async def run(req: RunRequest) -> RunResponse:
         run_id = uuid.uuid4().hex
-        pending = app.state.registry.create(run_id)
+        try:
+            pending = app.state.registry.create(run_id)
+        except RegistryFull as exc:
+            # Shed load rather than accumulate parked agent coroutines (F12).
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
 
         options = build_options(
             settings,

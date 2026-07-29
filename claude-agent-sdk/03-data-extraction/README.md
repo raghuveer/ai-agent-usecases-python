@@ -61,8 +61,8 @@ Per this repo's model policy, extraction defaults to a cloud model
 | `LLM_BASE_URL` | `http://localhost:8094` | Gateway **Anthropic** surface — no `/v1` suffix |
 | `LLM_GATEWAY_KEY` | placeholder | virtual key, sent as `Authorization: Bearer` |
 | `LLM_MODEL` | `claude-haiku` | local Qwen is unreliable for strict schemas |
-| `AGENT_MAX_TURNS` | `6` | pinned to 3 here — one tool call is the task |
-| `AGENT_MAX_BUDGET_USD` | `0.25` | hard spend cap per run |
+| `AGENT_MAX_TURNS` | `12` | pinned to 3 here — one tool call is the task |
+| `AGENT_MAX_BUDGET_USD` | `1.00` | hard spend cap per run |
 | `AGENT_EFFORT` | `low` | |
 
 ## Prerequisites

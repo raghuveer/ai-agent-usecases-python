@@ -55,8 +55,8 @@ clones stay reproducible and no binary lands in git). Three tables — `customer
 | `LLM_BASE_URL` | `http://localhost:8094` | Gateway **Anthropic** surface — no `/v1` suffix |
 | `LLM_GATEWAY_KEY` | placeholder | virtual key, sent as `Authorization: Bearer` |
 | `LLM_MODEL` | `claude-haiku` | `claude-sonnet` for gnarlier joins |
-| `AGENT_MAX_TURNS` | `6` | raised to ≥8: discover, query, and possibly fix |
-| `AGENT_MAX_BUDGET_USD` | `0.25` | hard spend cap per run |
+| `AGENT_MAX_TURNS` | `12` | raised to ≥8: discover, query, and possibly fix |
+| `AGENT_MAX_BUDGET_USD` | `1.00` | hard spend cap per run |
 | `AGENT_EFFORT` | `low` | |
 
 ## Prerequisites

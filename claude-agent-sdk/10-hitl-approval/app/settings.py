@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     agent_max_budget_usd: float = 1.00
     agent_effort: str = "low"
 
+    # Bounds on parked approvals. A parked run holds a live agent coroutine, so
+    # without these an unresolved /run leaks memory indefinitely (security
+    # review F12). On timeout the run is DENIED, never approved — silence must
+    # not be read as consent for a high-risk action.
+    approval_ttl_seconds: float = 900.0
+    approval_max_pending: int = 50
+
 
 def get_settings() -> Settings:
     return Settings()

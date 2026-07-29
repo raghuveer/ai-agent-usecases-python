@@ -57,8 +57,8 @@ quietly passed through. If the agent never emits a decision, that is reported as
 | `LLM_BASE_URL` | `http://localhost:8094` | Gateway **Anthropic** surface — no `/v1` suffix |
 | `LLM_GATEWAY_KEY` | placeholder | virtual key, sent as `Authorization: Bearer` |
 | `LLM_MODEL` | `claude-haiku` | ample for classification + routing |
-| `AGENT_MAX_TURNS` | `6` | ≥5 here: optional lookup, then emit |
-| `AGENT_MAX_BUDGET_USD` | `0.25` | hard spend cap per run |
+| `AGENT_MAX_TURNS` | `12` | ≥5 here: optional lookup, then emit |
+| `AGENT_MAX_BUDGET_USD` | `1.00` | hard spend cap per run |
 | `AGENT_EFFORT` | `low` | |
 
 Note the model difference from the sibling projects: triage runs on **free local

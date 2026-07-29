@@ -56,8 +56,8 @@ hidden: a truncated run should be visible, not silently returned as an answer.
 | `LLM_BASE_URL` | `http://localhost:8094` | Gateway **Anthropic** surface — no `/v1` suffix |
 | `LLM_GATEWAY_KEY` | placeholder | virtual key, sent as `Authorization: Bearer` |
 | `LLM_MODEL` | `claude-haiku` | `claude-sonnet` for longer chains |
-| `AGENT_MAX_TURNS` | `6` | raised to ≥8 here; a multi-step chain needs the room |
-| `AGENT_MAX_BUDGET_USD` | `0.25` | hard spend cap per run |
+| `AGENT_MAX_TURNS` | `12` | raised to ≥8 here; a multi-step chain needs the room |
+| `AGENT_MAX_BUDGET_USD` | `1.00` | hard spend cap per run |
 | `AGENT_EFFORT` | `low` | raise for harder questions |
 
 ## Prerequisites

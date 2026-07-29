@@ -250,3 +250,67 @@ async def test_errors_on_the_approved_path_still_propagate():
     pending.task = asyncio.create_task(boom())
     with pytest.raises(Exception, match="genuine transport failure"):
         await resolve_run(pending, approved=True)
+
+
+# --- F12: bounds on parked runs ------------------------------------------------
+
+
+def test_run_sheds_load_with_429_when_too_many_are_parked():
+    """A parked run holds a live coroutine, so the queue must be bounded."""
+    app = make_app()
+    app.state.registry.max_pending = 2
+    with TestClient(app) as client:
+        assert client.post("/run", json={"request": "a"}).status_code == 200
+        assert client.post("/run", json={"request": "b"}).status_code == 200
+        third = client.post("/run", json={"request": "c"})
+        assert third.status_code == 429
+        assert "awaiting approval" in third.json()["detail"]
+
+
+def test_resolving_a_run_frees_capacity_again():
+    app = make_app()
+    app.state.registry.max_pending = 1
+    with TestClient(app) as client:
+        run_id = client.post("/run", json={"request": "a"}).json()["run_id"]
+        assert client.post("/run", json={"request": "b"}).status_code == 429
+        assert client.post("/resume", json={"run_id": run_id, "approved": True}).status_code == 200
+        # Slot released by discard().
+        assert client.post("/run", json={"request": "c"}).status_code == 200
+
+
+@pytest.mark.anyio
+async def test_expired_run_is_denied_not_approved():
+    """Silence must never be read as consent for a high-risk action."""
+    from app.approval import ApprovalRegistry
+
+    registry = ApprovalRegistry(ttl_seconds=0.05, max_pending=10)
+    pending = registry.create("r-ttl")
+    gate = make_gate(pending)
+
+    task = asyncio.create_task(
+        gate(GUARDED_TOOL, {"to": "x", "body": "y"}, ToolPermissionContext())
+    )
+    await pending.requested.wait()
+
+    decision = await task  # unblocks when the reaper fires
+    assert isinstance(decision, PermissionResultDeny)
+    assert pending.expired is True
+    assert "timed out" in decision.message
+    # And the run is gone from the registry, so it stops occupying capacity.
+    assert registry.get("r-ttl") is None
+    assert len(registry) == 0
+
+
+@pytest.mark.anyio
+async def test_reaper_is_cancelled_when_a_run_resolves_normally():
+    """A resolved run must not be re-denied later by a stale timer."""
+    from app.approval import ApprovalRegistry
+
+    registry = ApprovalRegistry(ttl_seconds=0.05, max_pending=10)
+    pending = registry.create("r-ok")
+    pending.decision.set_result(True)
+    registry.discard("r-ok")
+
+    await asyncio.sleep(0.15)  # past the TTL
+    assert pending.expired is False
+    assert pending.decision.result() is True

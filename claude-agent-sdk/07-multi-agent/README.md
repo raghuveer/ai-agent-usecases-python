@@ -64,8 +64,8 @@ the lead *actually* delegated, not what it was told to do.
 | `LLM_BASE_URL` | `http://localhost:8094` | Gateway **Anthropic** surface — no `/v1` suffix |
 | `LLM_GATEWAY_KEY` | placeholder | virtual key, sent as `Authorization: Bearer` |
 | `LLM_MODEL` | `claude-haiku` | `claude-sonnet` if delegation quality is poor |
-| `AGENT_MAX_TURNS` | `6` | raised to ≥12 here for fan-out |
-| `AGENT_MAX_BUDGET_USD` | `0.25` | hard spend cap per run |
+| `AGENT_MAX_TURNS` | `12` | raised to ≥12 here for fan-out |
+| `AGENT_MAX_BUDGET_USD` | `1.00` | hard spend cap per run |
 | `AGENT_EFFORT` | `low` | raise for harder questions |
 
 ## Prerequisites

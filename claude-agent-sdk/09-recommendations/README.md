@@ -47,8 +47,8 @@ it becomes a real one. If you only need ranking, `raw-api/09` is one HTTP call.
 | `LLM_BASE_URL` | `http://localhost:8094` | Gateway **Anthropic** surface — no `/v1` suffix |
 | `LLM_GATEWAY_KEY` | placeholder | virtual key, sent as `Authorization: Bearer` |
 | `LLM_MODEL` | `claude-haiku` | ample for ranking + explanation |
-| `AGENT_MAX_TURNS` | `6` | profile, catalog, emit |
-| `AGENT_MAX_BUDGET_USD` | `0.25` | hard spend cap per run |
+| `AGENT_MAX_TURNS` | `12` | profile, catalog, emit |
+| `AGENT_MAX_BUDGET_USD` | `1.00` | hard spend cap per run |
 | `AGENT_EFFORT` | `low` | |
 
 As with UC05, the sibling projects run this on free local Qwen; this approach

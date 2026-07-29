@@ -54,8 +54,8 @@ findings. Everything is local, so this runs air-gapped.
 | `LLM_BASE_URL` | `http://localhost:8094` | Gateway **Anthropic** surface — no `/v1` suffix |
 | `LLM_GATEWAY_KEY` | placeholder | virtual key, sent as `Authorization: Bearer` |
 | `LLM_MODEL` | `claude-haiku` | ample for corpus Q&A |
-| `AGENT_MAX_TURNS` | `6` | each search/read round costs a turn |
-| `AGENT_MAX_BUDGET_USD` | `0.25` | hard spend cap per run |
+| `AGENT_MAX_TURNS` | `12` | each search/read round costs a turn |
+| `AGENT_MAX_BUDGET_USD` | `1.00` | hard spend cap per run |
 | `AGENT_EFFORT` | `low` | |
 
 ## Prerequisites

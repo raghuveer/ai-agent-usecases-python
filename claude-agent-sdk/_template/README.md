@@ -58,6 +58,8 @@ hard dollar cap are set on every run. `build_options` also pins:
   developer's `~/.claude` and the repo's `.claude/`.
 - `CLAUDE_CONFIG_DIR` pointed at a throwaway directory (in `sdk_env`) — **this is
   what actually isolates the run**, and it is easy to get wrong.
+- `tools=[]` — start from no built-in tools; each use case opts in explicitly, so
+  the README's tool list is the truth.
 
 > ⚠️ **`setting_sources=[]` is not enough on its own.** It gates *settings files*
 > only. It does **not** stop the CLI loading the developer's `~/.claude` project
@@ -70,8 +72,6 @@ hard dollar cap are set on every run. `build_options` also pins:
 > laptop it is on; UC07 was answering from leaked memory instead of its own
 > corpus) and **disclosure** (developer memory could otherwise be echoed into an
 > API response). See `docs/security-review.md` F14.
-- `tools=[]` — start from no built-in tools; each use case opts in explicitly, so
-  the README's tool list is the truth.
 
 ## Why local Qwen is not an option here
 
@@ -94,8 +94,8 @@ and every live test spends a small, capped amount of budget.
 | `LLM_BASE_URL` | `http://localhost:8094` | Gateway **Anthropic** surface — no `/v1` |
 | `LLM_GATEWAY_KEY` | placeholder | virtual key, sent as `Authorization: Bearer` |
 | `LLM_MODEL` | `claude-haiku` | allow-listed alias |
-| `AGENT_MAX_TURNS` | `6` | hard cap on agent turns |
-| `AGENT_MAX_BUDGET_USD` | `0.25` | hard cap on spend per run |
+| `AGENT_MAX_TURNS` | `12` | hard cap on agent turns |
+| `AGENT_MAX_BUDGET_USD` | `1.00` | hard cap on spend per run |
 | `AGENT_EFFORT` | `low` | thinking depth (`low`…`max`) |
 
 ## Prerequisites

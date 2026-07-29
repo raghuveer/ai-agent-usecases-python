@@ -66,8 +66,10 @@ limitation:
 - **No durability.** Restart the process and in-flight approvals are gone.
   `langgraph/10`'s checkpointer survives both — swap in `SqliteSaver`/
   `PostgresSaver` there and paused runs outlive the process.
-- **No TTL/eviction.** A run nobody ever approves stays parked. Production would
-  want a timeout that denies and reaps.
+- ~~**No TTL/eviction.**~~ **Fixed.** A run nobody resolves is auto-**denied**
+  and reaped after `APPROVAL_TTL_SECONDS`, and `APPROVAL_MAX_PENDING` caps how
+  many can be parked at once (`/run` returns **429** past it). Deny-on-timeout
+  is deliberate: silence must never be read as consent for a high-risk action.
 
 If approvals must survive restarts or span replicas, use
 [`langgraph/10-hitl-approval`](../../langgraph/10-hitl-approval). If you want the
@@ -83,7 +85,9 @@ gate to be three lines inside the agent you already have, use this.
 - `POST /resume` body `{"run_id": str, "approved": bool, "feedback": str|null}` →
   approved → `{"status":"executed","result": ...}`;
   not approved → `{"status":"rejected","result": null}`;
-  unknown / already-resumed `run_id` → **404**.
+  unknown, already-resumed, or timed-out `run_id` → **404**.
+
+`POST /run` returns **429** when `APPROVAL_MAX_PENDING` runs are already parked.
 
 ## Env vars (`.env.example`)
 
@@ -92,9 +96,11 @@ gate to be three lines inside the agent you already have, use this.
 | `LLM_BASE_URL` | `http://localhost:8094` | Gateway **Anthropic** surface — note: no `/v1` suffix (the SDK appends `/v1/messages`) |
 | `LLM_GATEWAY_KEY` | placeholder | platform virtual key, sent as `Authorization: Bearer` |
 | `LLM_MODEL` | `claude-haiku` | allow-listed alias; `claude-sonnet` for harder runs |
-| `AGENT_MAX_TURNS` | `6` | hard cap on agent turns |
-| `AGENT_MAX_BUDGET_USD` | `0.25` | hard cap on spend per run |
+| `AGENT_MAX_TURNS` | `12` | hard cap on agent turns |
+| `AGENT_MAX_BUDGET_USD` | `1.00` | hard cap on spend per run |
 | `AGENT_EFFORT` | `low` | thinking depth |
+| `APPROVAL_TTL_SECONDS` | `900` | unresolved runs are auto-**denied** and reaped |
+| `APPROVAL_MAX_PENDING` | `50` | cap on concurrently parked runs; `/run` → 429 past it |
 
 **Auth gotcha:** the gateway requires `Authorization: Bearer`. The SDK sends that
 only when `ANTHROPIC_AUTH_TOKEN` is set; `ANTHROPIC_API_KEY` makes it send

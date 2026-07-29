@@ -249,7 +249,7 @@ guarded exception, and it is unit-tested with an injection payload.
 | **F9** | **Shell execution enabled by default** in `02-code-generation` | 🔴 **High** (as shipped) | LLM05/LLM06, A03 | Documented + bounded; **not eliminated** |
 | **F10** | `cwd` does **not** confine agent file writes | 🟠 Medium | LLM06, A01 | Mitigated (prompt + read-back), not solved |
 | **F11** | Human-approval gate fails **open** on a config mistake | 🟠 Medium | LLM06 | **Fixed** + regression test |
-| **F12** | Parked HITL runs have no TTL or eviction | 🟡 Low | LLM10 | Documented; deploy-time concern |
+| **F12** | Parked HITL runs have no TTL or eviction | 🟡 Low | LLM10 | **Fixed** — deny-on-timeout reaper + capacity cap |
 | **F13** | Agent runtime depends on an external CLI resolved from `PATH` | 🟡 Low | LLM03, A08 | Documented |
 | **F14** | **Developer `~/.claude` memory leaked into agent context** despite `setting_sources=[]` | 🟠 Medium | LLM02, LLM07 | **Fixed** — `CLAUDE_CONFIG_DIR` isolation |
 
@@ -350,7 +350,7 @@ Live-run findings.
   network, CPU/memory/PID caps, non-root, read-only root filesystem (F9).
 - **Do not add the guarded tool to `allowed_tools`** in UC10, and keep
   `setting_sources=[]` so local settings cannot shadow the gate (F11).
-- **Add a TTL/reaper for parked approvals**, and run UC10 as a **single worker** (F12).
+- ~~Add a TTL/reaper for parked approvals~~ — **now built in** (`APPROVAL_TTL_SECONDS` / `APPROVAL_MAX_PENDING`); still run UC10 as a **single worker** (F12).
 - **Pin `cli_path`** and control `PATH` where the runtime is untrusted (F13).
 - **Treat `cwd` as ergonomics, not isolation** (F10).
 - **Set `CLAUDE_CONFIG_DIR` to a throwaway directory** — `setting_sources=[]`

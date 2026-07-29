@@ -91,6 +91,7 @@ class PendingRun:
     proposed_input: dict[str, Any] | None = None
     feedback: str | None = None
     task: asyncio.Task[AgentResult] | None = None
+    expired: bool = False
 
     @property
     def awaiting_approval(self) -> bool:
@@ -105,26 +106,69 @@ class PendingRun:
         return f"To: {to}\n{body}".strip()
 
 
+class RegistryFull(RuntimeError):
+    """Raised when too many runs are already parked awaiting approval."""
+
+
 class ApprovalRegistry:
     """In-process registry of parked runs, keyed by run_id.
 
     In-process is the correct scope: the thing being tracked is a suspended
     coroutine, which cannot outlive this process anyway.
+
+    **Two bounds, because a parked run holds a live coroutine.** Without them a
+    caller who never resumes could accumulate agent tasks until the process
+    exhausts memory (security review F12):
+
+    * ``ttl_seconds`` — a run nobody resolves is auto-**denied** and reaped. Deny
+      rather than approve: silence must never be read as consent for a
+      high-risk action.
+    * ``max_pending`` — a hard ceiling on concurrent parked runs; past it,
+      ``/run`` sheds load with 429 instead of queueing unboundedly.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, ttl_seconds: float = 900.0, max_pending: int = 50) -> None:
         self._runs: dict[str, PendingRun] = {}
+        self._reapers: dict[str, asyncio.Task[None]] = {}
+        self.ttl_seconds = ttl_seconds
+        self.max_pending = max_pending
+
+    def __len__(self) -> int:
+        return len(self._runs)
 
     def create(self, run_id: str) -> PendingRun:
+        if len(self._runs) >= self.max_pending:
+            raise RegistryFull(
+                f"{len(self._runs)} runs already awaiting approval "
+                f"(max_pending={self.max_pending})"
+            )
         pending = PendingRun(run_id=run_id)
         self._runs[run_id] = pending
+        self._reapers[run_id] = asyncio.create_task(self._reap_after_ttl(pending))
         return pending
+
+    async def _reap_after_ttl(self, pending: PendingRun) -> None:
+        """Auto-deny and discard a run that is never resolved."""
+        try:
+            await asyncio.sleep(self.ttl_seconds)
+        except asyncio.CancelledError:
+            return
+        if pending.decision.done():
+            return
+        pending.expired = True
+        pending.feedback = "Approval timed out; the action was not taken."
+        pending.decision.set_result(False)  # deny, never approve, on timeout
+        self._runs.pop(pending.run_id, None)
+        self._reapers.pop(pending.run_id, None)
 
     def get(self, run_id: str) -> PendingRun | None:
         return self._runs.get(run_id)
 
     def discard(self, run_id: str) -> None:
         self._runs.pop(run_id, None)
+        reaper = self._reapers.pop(run_id, None)
+        if reaper is not None:
+            reaper.cancel()
 
 
 def make_gate(pending: PendingRun, guarded_tool: str = GUARDED_TOOL):
