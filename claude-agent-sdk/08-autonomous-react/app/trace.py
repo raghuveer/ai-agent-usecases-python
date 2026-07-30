@@ -104,12 +104,20 @@ class Tracer:
         stop_reason: str,
         num_turns: int,
         cost_usd: float | None,
+        duration_ms: int | None = None,
     ) -> dict:
+        """``duration_ms`` must be passed in.
+
+        This tracer is built *after* the run, from the finished ``AgentResult``,
+        so its own clock started too late to mean anything — the caller times the
+        run and hands the number over. Whole-run duration is the one timing this
+        approach can honestly report.
+        """
         return {
             "schema_version": SCHEMA_VERSION,
             "run_id": self.run_id,
             "started_at": self.started_at,
-            "duration_ms": int((time.perf_counter() - self._t0) * 1000),
+            "duration_ms": duration_ms,
             "approach": self.approach,
             "usecase": self.usecase,
             "gen_ai": {

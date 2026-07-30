@@ -42,6 +42,23 @@ Ten common agent use cases, each implemented **four ways** — direct **Raw API*
 
 Which approach suits which use case (and the two raw-api combos deliberately kept minimal — multi-agent and HITL — with "why impractical here" notes) is tracked in **`TRACKING.md`**.
 
+### See the four approaches side by side
+
+**[`docs/compare/08-autonomous-react.md`](docs/compare/08-autonomous-react.md)** — the
+same ReAct task solved four ways: the core of each implementation, how much code
+each costs, and what a *real traced run* of each measured. Generated from the
+source it describes (`scripts/compare_usecase.py`), and CI fails if it drifts.
+
+Two things that page settles with numbers rather than opinion:
+
+- **raw-api, LangChain and LangGraph send byte-identical payloads** — 3,421 input
+  / 125 output tokens each. The frameworks add no prompt overhead here.
+- **Visibility falls as the framework writes more of your loop.** Add `?trace=1`
+  to any of those four projects and you get the exact messages sent, every tool
+  call and result, latency and tokens — except on the Agent SDK, which owns the
+  loop and so cannot report most of it. It reports what the others cannot: real
+  cost. See [`docs/trace-format.md`](docs/trace-format.md).
+
 ## The four approaches at a glance
 
 | | You write | Best at | Weakest at |

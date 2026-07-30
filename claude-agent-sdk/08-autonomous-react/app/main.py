@@ -5,6 +5,7 @@
 """FastAPI app for UC08 autonomous-react (claude-agent-sdk approach) — the showcase."""
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from fastapi import FastAPI
@@ -65,7 +66,9 @@ def create_app(runner: Runner | None = None) -> FastAPI:
         app/trace.py and the `not_captured` list in the response.
         """
         settings = app.state.settings
+        started = time.perf_counter()
         out = await run_react(req.question, settings, app.state.runner)
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
 
         doc = None
         if trace or settings.trace_sink != "none":
@@ -84,6 +87,7 @@ def create_app(runner: Runner | None = None) -> FastAPI:
                 stop_reason="max_turns" if out.hit_turn_limit else "final_answer",
                 num_turns=out.num_turns,
                 cost_usd=out.cost_usd,
+                duration_ms=elapsed_ms,
             )
             if settings.trace_sink == "file":
                 trace_mod.persist(doc, settings.trace_dir)

@@ -1,0 +1,69 @@
+{
+  "usecase": "08-autonomous-react",
+  "captured_at": "2026-07-30",
+  "model": "claude-haiku",
+  "runs": {
+    "raw-api": {
+      "steps": 3,
+      "tool_calls": 2,
+      "input_tokens": 3421,
+      "output_tokens": 125,
+      "cost_usd": null,
+      "duration_ms": 4608,
+      "stop_reason": "final_answer",
+      "graph_path": null,
+      "not_captured": null
+    },
+    "langchain": {
+      "steps": 3,
+      "tool_calls": 2,
+      "input_tokens": 3421,
+      "output_tokens": 125,
+      "cost_usd": null,
+      "duration_ms": 4474,
+      "stop_reason": "final_answer",
+      "graph_path": null,
+      "not_captured": null
+    },
+    "langgraph": {
+      "steps": 3,
+      "tool_calls": 2,
+      "input_tokens": 3421,
+      "output_tokens": 125,
+      "cost_usd": null,
+      "duration_ms": 3836,
+      "stop_reason": "final_answer",
+      "graph_path": [
+        "reason",
+        "act",
+        "observe",
+        "reason",
+        "act",
+        "observe",
+        "reason"
+      ],
+      "not_captured": null
+    },
+    "claude-agent-sdk": {
+      "steps": 4,
+      "tool_calls": 3,
+      "input_tokens": null,
+      "output_tokens": null,
+      "cost_usd": 0.422355,
+      "duration_ms": 7481,
+      "stop_reason": "final_answer",
+      "graph_path": null,
+      "not_captured": [
+        "request.messages: the SDK builds each request inside the harness",
+        "tool results: the harness executes tools and feeds output back internally",
+        "gen_ai.usage: the SDK reports cost, not token counts",
+        "per-call latency: only whole-run duration is observable"
+      ]
+    }
+  },
+  "notes": [
+    "`raw-api`, `langchain` and `langgraph` send identical payloads \u2014 the frameworks add no prompt overhead for this use case.",
+    "`claude-agent-sdk` reports cost but not tokens; the other three report tokens but not cost, because an OpenAI-compatible endpoint does not price the call. Unknown is recorded as null, never 0.",
+    "The agent-SDK task is phrased for its own tool set, so cost is not a controlled head-to-head \u2014 the order of magnitude is the point."
+  ]
+}
