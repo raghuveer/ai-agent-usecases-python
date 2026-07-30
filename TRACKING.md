@@ -90,8 +90,46 @@ three spot-checks. **24 passed first time; 6 failed, all for one shared cause.**
     workaround belongs here regardless, but `/v1/chat/completions` → `/v1/messages`
     translation should map `stop` → `stop_sequences` rather than 500.
 
+## Live-run findings (post-lockfile re-verification, 2026-07-30)
+
+After committing lockfiles for all 44 projects, every venv was re-synced to its
+lock and the whole live suite re-run. 39 of 40 passed unchanged; one failure
+exposed a defect the earlier passes had hidden.
+
+12. **A capped agent run discarded everything it had already produced.**
+    `claude-agent-sdk/07-multi-agent` returned `report: ""` with HTTP 200. It was
+    not caused by the new pins — it re-ran green — but chasing it found a real
+    bug in the shared `agent.py` seam, present in **all 11 agent-SDK projects**:
+
+    ```python
+    return AgentResult(is_error=True, stop_reason=reason)   # fresh, empty
+    ```
+
+    On hitting a configured cap, `default_runner` returned a *new* empty result,
+    throwing away the accumulated text, every tool call, and the turn count. A
+    run that had delegated to all three subagents and written most of a report
+    came back indistinguishable from one that did nothing. The intent was right —
+    the comment says callers should be able to surface "incomplete" — but there
+    was nothing left to surface.
+
+    Fixed by threading a result object into `collect()` so partial state survives
+    an exception mid-stream, keeping `.text` current per block rather than only
+    at the end, and counting turns as they happen. `cost_usd` deliberately stays
+    `0.0` on this path and is documented as *unknown*: no `ResultMessage` arrives,
+    so any figure would be invented — which matters because a capped run is by
+    definition the expensive one.
+
+    Separately, UC07's `max_turns` floor went 12 → 20. That is what actually ends
+    the flake: three delegations plus the lead's own turns did not fit in 12.
+    Spend stays bounded by `AGENT_MAX_BUDGET_USD`, which is the cap that really
+    protects the budget — turns are a poor proxy for cost.
+
+    Three regression tests: partial work survives a cap, non-cap errors still
+    propagate rather than being swallowed, and a capped team run still surfaces
+    its report. Verified with three consecutive live UC07 runs, all green.
+
 ## Status
 - **10/10 use cases × 4 approaches = 40 projects built.**
 - `claude-agent-sdk`: **131 offline unit tests green**. **All 14 integration tests verified live and passing — all 10 use cases.** Two live passes found 8 defects plus 1 test bug; every one is fixed, and the security-relevant ones (F10, F11, F14) are in `docs/security-review.md`.
 - raw-api / langchain / langgraph: re-pointed at `:8094` and **all 30 live-run 2026-07-30 — 30/30 passing** (18 free-local, 12 cloud). The sweep found one defect (finding 11 above) affecting 6 projects.
-- **Running total: 9 defects found by live runs that mocked tests could not see**, across both the agent-SDK build and the older 30.
+- **Running total: 10 defects found by live runs that mocked tests could not see**, across both the agent-SDK build and the older 30.

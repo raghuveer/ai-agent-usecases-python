@@ -18,7 +18,8 @@ import pytest
 from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, ToolUseBlock
 from fastapi.testclient import TestClient
 
-from app.agent import AgentResult, collect
+from app import agent as agent_mod
+from app.agent import AgentResult, collect, default_runner
 from app.main import create_app
 
 
@@ -121,3 +122,47 @@ async def test_collect_drops_thinking_blocks():
     )
     assert out.text == "visible"
     assert "secret" not in out.text
+
+
+@pytest.mark.anyio
+async def test_capped_run_keeps_the_work_it_already_did(monkeypatch):
+    """Hitting a configured cap must not discard the partial result.
+
+    Regression: ``default_runner`` used to return a fresh empty ``AgentResult``
+    on a cap, so a run that had delegated and written most of an answer came
+    back with empty text and no tool calls — indistinguishable from a run that
+    did nothing at all. Caught by a live multi-agent run returning an empty
+    report while its subagents had in fact done the work.
+    """
+
+    async def fake_query(*, prompt, options):
+        yield _assistant(TextBlock(text="Half an answer."))
+        yield _assistant(ToolUseBlock(id="t1", name="Read", input={"file_path": "a"}))
+        raise RuntimeError("Reached maximum number of turns (12)")
+
+    monkeypatch.setattr(agent_mod, "query", fake_query)
+
+    out = await default_runner("q", agent_mod.ClaudeAgentOptions())
+
+    assert out.stop_reason == "max_turns"
+    assert out.is_error is True
+    assert out.text == "Half an answer."     # was "" before the fix
+    assert out.tool_names == ["Read"]        # was [] before the fix
+    assert out.num_turns == 2                # counted per assistant message
+    # No ResultMessage arrived, so spend is unknown — reported as 0.0 rather
+    # than invented. Documented, not a claim that the run was free.
+    assert out.cost_usd == 0.0
+
+
+@pytest.mark.anyio
+async def test_unexpected_errors_still_propagate(monkeypatch):
+    """Only the caps we configure are swallowed; real failures must surface."""
+
+    async def boom(*, prompt, options):
+        raise RuntimeError("connection reset by peer")
+        yield  # pragma: no cover - makes this an async generator
+
+    monkeypatch.setattr(agent_mod, "query", boom)
+
+    with pytest.raises(RuntimeError, match="connection reset"):
+        await default_runner("q", agent_mod.ClaudeAgentOptions())

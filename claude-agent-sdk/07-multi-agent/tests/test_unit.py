@@ -106,5 +106,31 @@ async def test_options_register_subagents_and_raise_turn_ceiling():
 
     assert set(seen["agents"]) == {"researcher", "analyst", "writer"}
     assert "Agent" in seen["tools"], "delegation needs the Agent tool"
-    # Fan-out needs more headroom than the shared default of 6.
-    assert seen["max_turns"] >= 12
+    # Fan-out needs more headroom than the shared default. 12 proved too tight
+    # in live runs — three delegations plus the lead's own turns hit the cap and
+    # the report came back empty — so the floor is 20.
+    assert seen["max_turns"] >= 20
+
+
+@pytest.mark.anyio
+async def test_capped_run_still_surfaces_partial_report():
+    """A capped run must report what the team produced, not an empty string.
+
+    Regression for the live flake: the runner discarded partial work on a cap,
+    so `/run` answered 200 with an empty report and no delegations even though
+    the subagents had done the work.
+    """
+
+    async def capped(prompt, options) -> AgentResult:
+        return AgentResult(
+            text="Partial findings so far.",
+            tool_calls=[ToolCall(name="Agent", input={"subagent_type": "researcher"})],
+            num_turns=20,
+            is_error=True,
+            stop_reason="max_turns",
+        )
+
+    out = await run_team("q", Settings(), capped)
+
+    assert out.report == "Partial findings so far."
+    assert out.subagents_used == ["researcher"]

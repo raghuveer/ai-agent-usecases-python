@@ -125,7 +125,11 @@ async def run_team(
         agents=TEAM,
         cwd=str(corpus_dir or CORPUS_DIR),
         # Multi-agent runs fan out, so they need more headroom than a flat run.
-        max_turns=max(settings.agent_max_turns, 12),
+        # 12 was not enough: three delegations plus the lead's own read/write
+        # turns intermittently hit the cap, and the run then returned an empty
+        # report. Spend stays bounded by AGENT_MAX_BUDGET_USD, which is the cap
+        # that actually protects the budget.
+        max_turns=max(settings.agent_max_turns, 20),
     )
     result = await runner(question, options)
     return TeamResult(

@@ -43,8 +43,11 @@ air-gapped.
 ## Cost note
 
 This is the most expensive example in the approach — each delegation spawns a
-subagent with its own context. `max_turns` is raised to at least 12 here (fan-out
-needs the headroom) and `AGENT_MAX_BUDGET_USD` is the backstop.
+subagent with its own context. `max_turns` is raised to at least 20 here and
+`AGENT_MAX_BUDGET_USD` is the backstop. The floor was 12 until a live run hit it:
+three delegations plus the lead's own read/write turns intermittently exhausted
+the cap, and the run returned an empty report. Turns are the wrong lever for
+controlling spend anyway — the budget cap is the one that actually bounds cost.
 
 ## API
 
@@ -64,7 +67,7 @@ the lead *actually* delegated, not what it was told to do.
 | `LLM_BASE_URL` | `http://localhost:8094` | Gateway **Anthropic** surface — no `/v1` suffix |
 | `LLM_GATEWAY_KEY` | placeholder | virtual key, sent as `Authorization: Bearer` |
 | `LLM_MODEL` | `claude-haiku` | `claude-sonnet` if delegation quality is poor |
-| `AGENT_MAX_TURNS` | `12` | raised to ≥12 here for fan-out |
+| `AGENT_MAX_TURNS` | `12` | raised to ≥20 here for fan-out |
 | `AGENT_MAX_BUDGET_USD` | `1.00` | hard spend cap per run |
 | `AGENT_EFFORT` | `low` | raise for harder questions |
 

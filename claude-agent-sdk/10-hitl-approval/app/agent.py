@@ -138,7 +138,14 @@ def build_options(
     return ClaudeAgentOptions(**opts)
 
 
-async def collect(messages: AsyncIterable[Any]) -> AgentResult:
+def _join(chunks: list[str]) -> str:
+    """Assistant text, joined and trimmed."""
+    return "\n".join(c for c in chunks if c).strip()
+
+
+async def collect(
+    messages: AsyncIterable[Any], result: AgentResult | None = None
+) -> AgentResult:
     """Fold the SDK's message stream into an :class:`AgentResult`.
 
     Assistant text accumulates across turns; ``ResultMessage`` carries the run
@@ -146,14 +153,22 @@ async def collect(messages: AsyncIterable[Any]) -> AgentResult:
     not answer, and echoing it into an API response would leak chain-of-thought
     to callers.
     """
-    result = AgentResult()
+    # Callers may pass their own result so partial work survives an
+    # exception mid-stream (see default_runner).
+    result = result if result is not None else AgentResult()
     chunks: list[str] = []
 
     async for message in messages:
         if isinstance(message, AssistantMessage):
+            # Counted as we go so a capped run still reports the turns it used;
+            # ResultMessage overwrites this with the authoritative total below.
+            result.num_turns += 1
             for block in message.content:
                 if isinstance(block, TextBlock):
                     chunks.append(block.text)
+                    # Keep .text current per block, not only at the end, so it
+                    # is already populated if the stream raises.
+                    result.text = _join(chunks)
                 elif isinstance(block, ToolUseBlock):
                     result.tool_calls.append(
                         ToolCall(name=block.name, input=dict(block.input or {}))
@@ -170,7 +185,7 @@ async def collect(messages: AsyncIterable[Any]) -> AgentResult:
             if not chunks and message.result:
                 chunks.append(message.result)
 
-    result.text = "\n".join(c for c in chunks if c).strip()
+    result.text = _join(chunks)
     return result
 
 
@@ -216,15 +231,23 @@ async def default_runner(prompt: str, options: ClaudeAgentOptions) -> AgentResul
         if options.can_use_tool is not None
         else query(prompt=prompt, options=options)
     )
+    result = AgentResult()
     try:
-        return await collect(stream)
+        return await collect(stream, result)
     except Exception as exc:  # noqa: BLE001 - re-raised unless it is a known cap
         reason = _cap_reason(str(exc))
         if reason is None:
             raise
         # Hitting a cap we configured is an expected terminal condition, not a
         # failure: report it so callers can surface "incomplete" instead of 500.
-        return AgentResult(is_error=True, stop_reason=reason)
+        # Keep what the run produced before the cap -- returning a fresh empty
+        # result made a capped run indistinguishable from one that did nothing
+        # (empty answer, no tool calls), which is exactly the case a caller most
+        # needs to see. `cost_usd` stays 0.0: no ResultMessage arrived, so the
+        # real spend is genuinely unknown rather than zero.
+        result.is_error = True
+        result.stop_reason = reason
+        return result
 
 
 # The seam unit tests replace.
