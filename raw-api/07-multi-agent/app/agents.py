@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, Iterator
 
 from .search import format_research, research
 
@@ -142,19 +142,113 @@ def orchestrate(
     Order is enforced by hand: research first, then the first draft, then the
     review; on rejection the writer redrafts (up to ``max_revisions`` times)
     using the latest critique, and the reviewer judges the new draft.
-    """
-    facts, research_block = researcher(topic, research_top_k)
 
-    draft = writer(llm_call, topic, research_block)
-    review, approved = reviewer(llm_call, topic, research_block, draft)
+    Drains :func:`iter_orchestrate`, so the blocking and streaming paths cannot
+    drift apart — one orchestration, exposed two ways.
+    """
+    result: MultiAgentResult | None = None
+    for event in iter_orchestrate(
+        topic,
+        llm_call=llm_call,
+        research_top_k=research_top_k,
+        max_revisions=max_revisions,
+    ):
+        if event["type"] == "final":
+            result = event["result"]
+    assert result is not None, "iter_orchestrate always ends with a final event"
+    return result
+
+
+def iter_orchestrate(
+    topic: str,
+    *,
+    llm_call: LLMCall | None = None,
+    llm_stream: Callable[[str, str], Iterator[str]] | None = None,
+    research_top_k: int = 4,
+    max_revisions: int = 1,
+) -> Iterator[dict]:
+    """The orchestration as a stream of events. See docs/streaming.md.
+
+    Yields, as they happen:
+
+    * ``{"type": "role", "name": …}``      — a role takes over
+    * ``{"type": "token", "text": …}``     — only when ``llm_stream`` is given
+    * ``{"type": "artifact", "name": …}``  — a role produced something
+    * ``{"type": "revision", "n": …}``     — the reviewer sent it back
+    * ``{"type": "final", "result": …}``   — always last
+
+    The hand-offs are the interesting part here: with raw-api you can see the
+    order is enforced by this function and nothing else.
+    """
+    if llm_call is None and llm_stream is None:
+        raise ValueError("pass llm_call or llm_stream")
+
+    def _run(system: str, user: str, role: str) -> Iterator[dict]:
+        """Yield token events (when streaming) and finally the text."""
+        if llm_stream is not None:
+            pieces: list[str] = []
+            for piece in llm_stream(system, user):
+                pieces.append(piece)
+                yield {"type": "token", "text": piece}
+            yield {"type": "_text", "text": "".join(pieces).strip()}
+        else:
+            yield {"type": "_text", "text": llm_call(system, user)}
+
+    def _drain(gen: Iterator[dict], out: list[dict]) -> str:
+        text = ""
+        for event in gen:
+            if event["type"] == "_text":
+                text = event["text"]
+            else:
+                out.append(event)
+        return text
+
+    yield {"type": "role", "name": "researcher"}
+    facts, research_block = researcher(topic, research_top_k)
+    yield {"type": "artifact", "name": "research", "text": research_block}
+
+    yield {"type": "role", "name": "writer"}
+    pending: list[dict] = []
+    draft = _drain(_run(WRITER_SYSTEM, writer_user(topic, research_block), "writer"), pending)
+    yield from pending
+    yield {"type": "artifact", "name": "draft", "text": draft}
+
+    yield {"type": "role", "name": "reviewer"}
+    pending = []
+    review_text = _drain(
+        _run(REVIEWER_SYSTEM, reviewer_user(topic, research_block, draft), "reviewer"),
+        pending,
+    )
+    yield from pending
+    approved = parse_approved(review_text)
+    review = review_text
+    yield {"type": "artifact", "name": "review", "text": review, "approved": approved}
 
     revisions = 0
     while not approved and revisions < max_revisions:
         revisions += 1
-        draft = writer(llm_call, topic, research_block, critique=review)
-        review, approved = reviewer(llm_call, topic, research_block, draft)
+        yield {"type": "revision", "n": revisions}
 
-    return MultiAgentResult(
+        yield {"type": "role", "name": "writer"}
+        pending = []
+        draft = _drain(
+            _run(WRITER_SYSTEM, writer_user(topic, research_block, critique=review), "writer"),
+            pending,
+        )
+        yield from pending
+        yield {"type": "artifact", "name": "draft", "text": draft}
+
+        yield {"type": "role", "name": "reviewer"}
+        pending = []
+        review = _drain(
+            _run(REVIEWER_SYSTEM, reviewer_user(topic, research_block, draft), "reviewer"),
+            pending,
+        )
+        yield from pending
+        approved = parse_approved(review)
+        yield {"type": "artifact", "name": "review", "text": review, "approved": approved}
+
+    yield {"type": "final", "result": MultiAgentResult(
         draft=draft,
         review=review,
         approved=approved,
@@ -164,4 +258,4 @@ def orchestrate(
             "reviewer": review,
         },
         revisions=revisions,
-    )
+    )}

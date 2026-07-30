@@ -146,11 +146,26 @@ def _fake_openai_client(replies: list[str]) -> MagicMock:
 
     def _create(**kwargs):
         text = queue.pop(0) if queue else "Critique: ok\nAPPROVED: yes"
+        if kwargs.get("stream"):
+            # The streaming path consumes deltas, not a message. Split into a
+            # few chunks so the tests exercise reassembly rather than one blob.
+            def chunks():
+                for piece in [text[i:i + 8] for i in range(0, len(text), 8)]:
+                    delta = MagicMock()
+                    delta.content = piece
+                    choice = MagicMock()
+                    choice.delta = delta
+                    yield MagicMock(choices=[choice])
+
+            return chunks()
         msg = MagicMock()
         msg.content = text
         choice = MagicMock()
         choice.message = msg
-        return MagicMock(choices=[choice])
+        return MagicMock(
+            choices=[choice],
+            usage=MagicMock(prompt_tokens=100, completion_tokens=20),
+        )
 
     client.chat.completions.create.side_effect = _create
     return client
@@ -197,3 +212,74 @@ def test_strip_thinking_removes_qwen3_think_blocks():
     assert strip_thinking("  30 days.  ") == "30 days."
     # Chain-of-thought must never survive into a response.
     assert "reasoning" not in strip_thinking("<think>reasoning</think>ok")
+
+
+# --------------------------------------------------------------------------- #
+# Tracing + streaming. See docs/trace-format.md and docs/streaming.md
+# --------------------------------------------------------------------------- #
+def _client_with(replies):
+    from app.main import create_app
+    from app.settings import Settings
+
+    app = create_app()
+    app.state.settings = Settings()
+    app.state.client = _fake_openai_client(list(replies))
+    return TestClient(app)
+
+
+_TEAM_SCRIPT = ["A short draft.", "Critique: fine.\nAPPROVED: yes"]
+
+
+def test_trace_absent_unless_requested():
+    body = _client_with(_TEAM_SCRIPT).post("/run", json={"topic": "x"}).json()
+    assert body["trace"] is None
+
+
+def test_trace_records_one_span_per_role_call():
+    trace = _client_with(_TEAM_SCRIPT).post(
+        "/run?trace=1", json={"topic": "x"}
+    ).json()["trace"]
+
+    assert trace["approach"] == "raw-api"
+    assert trace["usecase"] == "07-multi-agent"
+    # The researcher is deterministic (no model call); writer + reviewer are not.
+    assert [s["type"] for s in trace["spans"]] == ["llm", "llm"]
+    assert trace["outcome"]["stop_reason"] == "approved"
+
+
+def test_stream_reports_the_handoffs():
+    """`role` frames are what UC07 adds: the orchestration order, live."""
+    import json as _json
+
+    with _client_with(_TEAM_SCRIPT).stream(
+        "POST", "/run/stream", json={"topic": "x"}
+    ) as resp:
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/event-stream")
+        body = "".join(resp.iter_text())
+
+    # Parse event/data pairs properly: `artifact` frames carry a "name" too, so
+    # filtering on the field alone mixes the two kinds.
+    roles, current = [], None
+    for line in body.splitlines():
+        if line.startswith("event: "):
+            current = line.split(": ", 1)[1]
+        elif line.startswith("data: ") and current == "role":
+            roles.append(_json.loads(line[6:])["name"])
+    assert roles[:3] == ["researcher", "writer", "reviewer"]
+    assert "event: artifact" in body
+    assert "event: final" in body
+    assert body.endswith("\n\n")
+
+
+def test_blocking_and_streaming_agree():
+    blocking = _client_with(_TEAM_SCRIPT).post("/run", json={"topic": "x"}).json()
+    with _client_with(_TEAM_SCRIPT).stream(
+        "POST", "/run/stream", json={"topic": "x"}
+    ) as resp:
+        body = "".join(resp.iter_text())
+    import json as _json
+
+    final = _json.loads(body.rsplit("data: ", 1)[1].strip())
+    assert blocking["draft"] == final["draft"]
+    assert blocking["approved"] == final["approved"]

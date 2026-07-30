@@ -43,6 +43,14 @@ class Settings(BaseSettings):
     approval_ttl_seconds: float = 900.0
     approval_max_pending: int = 50
 
+    # Tracing (see docs/trace-format.md). `?trace=1` always returns the trace
+    # inline; the sink controls whether anything is written to disk.
+    trace_sink: str = "none"  # none | file
+    trace_dir: str = "traces"
+    # Traces embed the full prompt, so they contain whatever the caller sent.
+    # Set 0 to keep timings and token counts but drop message content.
+    trace_include_prompts: bool = True
+
 
 def get_settings() -> Settings:
     return Settings()
