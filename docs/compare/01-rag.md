@@ -8,7 +8,7 @@ Every approach here solves an identical task with identical tools. What differs 
 
 | Approach | `app/` lines | Core symbol | The trade |
 |---|---:|---|---|
-| [`raw-api`](../../raw-api/01-rag) | 226 | `app/rag.py::answer` | Retrieve, build a prompt, call once. No framework needed. |
+| [`raw-api`](../../raw-api/01-rag) | 241 | `app/rag.py::answer` | Retrieve, build a prompt, call once. No framework needed. |
 | [`langchain`](../../langchain/01-rag) | 212 | `app/rag.py::build_chain` | The natural fit: a retriever and an LCEL chain, declared not written. |
 | [`langgraph`](../../langgraph/01-rag) | 225 | `app/rag.py::build_rag_graph` | A graph for a straight line — structural cost with no payoff here. |
 | [`claude-agent-sdk`](../../claude-agent-sdk/01-rag) | 318 | `app/rag.py::answer` | No vector store: retrieval is lexical Grep/Read, so phrasing can miss. |
