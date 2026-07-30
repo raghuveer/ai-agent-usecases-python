@@ -66,6 +66,17 @@ corpus risks getting key terms redacted to `<PERSON>`/`<LOCATION>`. The
 researcher scores each bullet line by word overlap with the topic and returns
 the best `RESEARCH_TOP_K`.
 
+## Traces and streaming
+
+`POST /run?trace=1` records every call the roles made
+([`docs/trace-format.md`](../../docs/trace-format.md)); `POST /run/stream`
+reports the hand-offs as they happen
+([`docs/streaming.md`](../../docs/streaming.md)).
+
+```bash
+curl -N -X POST localhost:8000/run/stream -H 'content-type: application/json' -d '{"topic":"return policy"}'
+```
+
 ## Env vars (`.env.example`)
 
 | Var | Default | Meaning |

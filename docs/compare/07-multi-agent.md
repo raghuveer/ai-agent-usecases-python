@@ -9,9 +9,9 @@ Every approach here solves an identical task with identical tools. What differs 
 | Approach | `app/` lines | Core symbol | The trade |
 |---|---:|---|---|
 | [`raw-api`](../../raw-api/07-multi-agent) | 726 | `app/agents.py::orchestrate` | You hand-roll the orchestrator, the hand-offs, and the review gate. |
-| [`langchain`](../../langchain/07-multi-agent) | 502 | `app/agents.py::orchestrate` | Chains per role, sequenced by hand — the coordination is not the framework's job. |
-| [`langgraph`](../../langgraph/07-multi-agent) | 526 | `app/graph.py::build_multi_agent_graph` | Roles are nodes and hand-offs are edges; the topology is the program. |
-| [`claude-agent-sdk`](../../claude-agent-sdk/07-multi-agent) | 490 | `app/team.py::run_team` | Subagents are data: a dict of definitions, each with its own context and tools. |
+| [`langchain`](../../langchain/07-multi-agent) | 718 | `app/agents.py::orchestrate` | Chains per role, sequenced by hand — the coordination is not the framework's job. |
+| [`langgraph`](../../langgraph/07-multi-agent) | 709 | `app/graph.py::build_multi_agent_graph` | Roles are nodes and hand-offs are edges; the topology is the program. |
+| [`claude-agent-sdk`](../../claude-agent-sdk/07-multi-agent) | 618 | `app/team.py::run_team` | Subagents are data: a dict of definitions, each with its own context and tools. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
 
@@ -63,44 +63,22 @@ def orchestrate(
     research_top_k: int = 4,
     max_revisions: int = 1,
 ) -> MultiAgentResult:
-    """Run researcher → writer → reviewer with one bounded revise loop."""
-    research_block = format_research(research(topic, top_k=research_top_k))
+    """Run researcher → writer → reviewer with one bounded revise loop.
 
-    writer = build_writer_chain(llm)
-    reviewer = build_reviewer_chain(llm)
-
-    draft = writer.invoke(
-        {"topic": topic, "research": research_block, "critique": ""}
-    ).strip()
-    review = reviewer.invoke(
-        {"topic": topic, "research": research_block, "draft": draft}
-    ).strip()
-    approved = parse_approved(review)
-
-    revisions = 0
-    while not approved and revisions < max_revisions:
-        revisions += 1
-        draft = writer.invoke({
-            "topic": topic,
-            "research": research_block,
-            "critique": _critique_block(review),
-        }).strip()
-        review = reviewer.invoke(
-            {"topic": topic, "research": research_block, "draft": draft}
-        ).strip()
-        approved = parse_approved(review)
-
-    return MultiAgentResult(
-        draft=draft,
-        review=review,
-        approved=approved,
-        contributions={
-            "research": research_block,
-            "writer": draft,
-            "reviewer": review,
-        },
-        revisions=revisions,
-    )
+    Drains :func:`iter_orchestrate`, so the blocking and streaming paths cannot
+    drift apart — one orchestration, exposed two ways.
+    """
+    result: MultiAgentResult | None = None
+    for event in iter_orchestrate(
+        topic,
+        llm=llm,
+        research_top_k=research_top_k,
+        max_revisions=max_revisions,
+    ):
+        if event["type"] == "final":
+            result = event["result"]
+    assert result is not None, "iter_orchestrate always ends with a final event"
+    return result
 ```
 
 ### langgraph — `app/graph.py`

@@ -188,6 +188,25 @@ Ollama, no gateway — surfaced four things the usual configuration hides:
     request fails. Documented in the README rather than worked around — real
     `docker compose` honours it.
 
+## Found while adding streaming to UC07 (2026-07-31)
+
+17. **A plain function in an LCEL chain silently disables streaming.** The
+    `strip_thinking` sweep (finding 13) appended `| strip_thinking` to every
+    langchain chain. LangChain wraps a bare callable in a `RunnableLambda`,
+    which materialises its whole input before running — so `chain.stream()`
+    collapsed to **2 token frames instead of 149**, with no error and no
+    warning. The endpoint still streamed; it just had nothing to stream.
+
+    Fixed in `langchain/07` with `strip_thinking_stream`, a *generator*
+    function: LangChain treats it as a transform, so it yields as it goes.
+    `invoke()` is unaffected — the generator is drained.
+
+    **Latent in the other nine langchain projects**: they carry the same
+    `| strip_thinking` step and would fail the same way the moment anyone
+    streams them. Worth sweeping when streaming reaches them; harmless until
+    then, which is exactly why it is recorded here rather than left to be
+    rediscovered.
+
 ## Status
 - **10/10 use cases × 4 approaches = 40 projects built.**
 - `claude-agent-sdk`: **131 offline unit tests green**. **All 14 integration tests verified live and passing — all 10 use cases.** Two live passes found 8 defects plus 1 test bug; every one is fixed, and the security-relevant ones (F10, F11, F14) are in `docs/security-review.md`.

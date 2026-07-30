@@ -31,13 +31,13 @@ hand-wired ``raw-api/07-multi-agent``. The LLM is injected, so unit tests pass a
 from __future__ import annotations
 
 import re
-from typing import Optional, TypedDict
+from typing import Iterator, Optional, TypedDict
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
-from .llm import strip_thinking, system_prefix
+from .llm import ThinkFilter, strip_thinking, system_prefix
 from .search import format_research, research
 
 # --------------------------------------------------------------------------- #
@@ -162,19 +162,11 @@ def build_multi_agent_graph(llm: BaseChatModel):
     return graph.compile()
 
 
-def run_multi_agent(
-    topic: str,
-    *,
-    llm: BaseChatModel,
-    research_top_k: int = 4,
-    max_revisions: int = 1,
-) -> dict:
-    """Run the compiled graph and return a normalised result dict.
-
-    Returns ``{"draft", "review", "approved", "contributions", "revisions"}``.
-    """
-    graph = build_multi_agent_graph(llm)
-    init: MultiAgentState = {
+def _initial_state(
+    topic: str, research_top_k: int, max_revisions: int
+) -> MultiAgentState:
+    """Starting state — shared by the blocking and streaming paths."""
+    return {
         "topic": topic,
         "research_top_k": research_top_k,
         "max_revisions": max_revisions,
@@ -184,8 +176,99 @@ def run_multi_agent(
         "approved": False,
         "revisions": 0,
     }
+
+
+def iter_multi_agent(
+    topic: str,
+    *,
+    llm: BaseChatModel,
+    research_top_k: int = 4,
+    max_revisions: int = 1,
+) -> Iterator[dict]:
+    """The team as a stream of events. See docs/streaming.md.
+
+    Like `langgraph/08`, this streams token chunks *and* node transitions
+    (``stream_mode=["messages", "updates"]``). For a multi-agent team the node
+    frames are the hand-offs themselves — researcher, writer, reviewer, revise —
+    reported by the framework rather than narrated by our own code, which is the
+    difference from `raw-api/07`.
+    """
+    graph = build_multi_agent_graph(llm)
+    init = _initial_state(topic, research_top_k, max_revisions)
+
+    think = ThinkFilter()
+    state: dict = {}
+
+    for mode, chunk in graph.stream(
+        init,
+        config={"recursion_limit": max_revisions * 3 + 6},
+        stream_mode=["messages", "updates"],
+    ):
+        if mode == "messages":
+            message, _meta = chunk
+            raw = getattr(message, "content", "") or ""
+            visible = think.feed(raw if isinstance(raw, str) else str(raw))
+            if visible:
+                yield {"type": "token", "text": visible}
+            continue
+
+        for node, delta in (chunk or {}).items():
+            # The graph reports the hand-off; we do not have to track it.
+            yield {"type": "role", "name": node}
+            state.update(delta or {})
+            for artifact in ("research", "draft", "review"):
+                if delta and artifact in delta and delta[artifact]:
+                    yield {
+                        "type": "artifact",
+                        "name": artifact,
+                        "text": delta[artifact],
+                    }
+
+    tail = think.flush()
+    if tail:
+        yield {"type": "token", "text": tail}
+
+    yield {"type": "final", "result": _normalise(state)}
+
+
+def _normalise(out: dict) -> dict:
+    """Graph state -> the response contract."""
+    return {
+        "draft": out.get("draft", ""),
+        "review": out.get("review", ""),
+        "approved": out.get("approved", False),
+        "revisions": out.get("revisions", 0),
+        "contributions": {
+            "research": out.get("research", ""),
+            "writer": out.get("draft", ""),
+            "reviewer": out.get("review", ""),
+        },
+    }
+
+
+def run_multi_agent(
+    topic: str,
+    *,
+    llm: BaseChatModel,
+    research_top_k: int = 4,
+    max_revisions: int = 1,
+    callbacks: list | None = None,
+) -> dict:
+    """Run the compiled graph and return a normalised result dict.
+
+    ``callbacks`` go in the graph's run config, not on the model: that is the
+    only place LangGraph reports which *node* is executing, so a handler
+    attached to the LLM records every call and none of the route.
+
+    Returns ``{"draft", "review", "approved", "contributions", "revisions"}``.
+    """
+    graph = build_multi_agent_graph(llm)
+    init = _initial_state(topic, research_top_k, max_revisions)
     # Each revise cycle adds writer+reviewer+revise nodes; give recursion headroom.
-    out = graph.invoke(init, config={"recursion_limit": max_revisions * 3 + 6})
+    config: dict = {"recursion_limit": max_revisions * 3 + 6}
+    if callbacks:
+        config["callbacks"] = callbacks
+    out = graph.invoke(init, config=config)
     return {
         "draft": out["draft"],
         "review": out["review"],

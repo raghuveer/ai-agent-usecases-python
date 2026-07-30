@@ -24,13 +24,14 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from typing import Iterator
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
 
-from .llm import strip_thinking, system_prefix
+from .llm import ThinkFilter, strip_thinking_stream, system_prefix
 from .search import format_research, research
 
 # --------------------------------------------------------------------------- #
@@ -61,7 +62,7 @@ def build_writer_chain(llm: BaseChatModel) -> Runnable:
          "Topic: {topic}\n\nResearch notes:\n{research}\n{critique}\n"
          "Write the summary now."),
     ])
-    return prompt | llm | StrOutputParser() | strip_thinking
+    return prompt | llm | StrOutputParser() | strip_thinking_stream
 
 
 def build_reviewer_chain(llm: BaseChatModel) -> Runnable:
@@ -72,7 +73,7 @@ def build_reviewer_chain(llm: BaseChatModel) -> Runnable:
          "Topic: {topic}\n\nResearch notes:\n{research}\n\n"
          "Draft summary:\n{draft}\n\nReview it now."),
     ])
-    return prompt | llm | StrOutputParser() | strip_thinking
+    return prompt | llm | StrOutputParser() | strip_thinking_stream
 
 
 def _critique_block(critique: str | None) -> str:
@@ -120,34 +121,123 @@ def orchestrate(
     research_top_k: int = 4,
     max_revisions: int = 1,
 ) -> MultiAgentResult:
-    """Run researcher → writer → reviewer with one bounded revise loop."""
+    """Run researcher → writer → reviewer with one bounded revise loop.
+
+    Drains :func:`iter_orchestrate`, so the blocking and streaming paths cannot
+    drift apart — one orchestration, exposed two ways.
+    """
+    result: MultiAgentResult | None = None
+    for event in iter_orchestrate(
+        topic,
+        llm=llm,
+        research_top_k=research_top_k,
+        max_revisions=max_revisions,
+    ):
+        if event["type"] == "final":
+            result = event["result"]
+    assert result is not None, "iter_orchestrate always ends with a final event"
+    return result
+
+
+def iter_orchestrate(
+    topic: str,
+    *,
+    llm: BaseChatModel,
+    research_top_k: int = 4,
+    max_revisions: int = 1,
+    stream: bool = False,
+) -> Iterator[dict]:
+    """The orchestration as a stream of events. See docs/streaming.md.
+
+    With ``stream=True`` each role runs through ``chain.stream()`` — LangChain
+    composes streaming through the whole chain (prompt | llm | parser), so the
+    only change from the blocking path is the verb. Compare `raw-api/07`, which
+    threads deltas by hand.
+    """
     research_block = format_research(research(topic, top_k=research_top_k))
 
     writer = build_writer_chain(llm)
     reviewer = build_reviewer_chain(llm)
 
-    draft = writer.invoke(
-        {"topic": topic, "research": research_block, "critique": ""}
-    ).strip()
-    review = reviewer.invoke(
-        {"topic": topic, "research": research_block, "draft": draft}
-    ).strip()
+    def _run(chain, payload: dict) -> Iterator[dict]:
+        if stream:
+            think = ThinkFilter()
+            pieces: list[str] = []
+            for piece in chain.stream(payload):
+                text = piece if isinstance(piece, str) else str(piece)
+                visible = think.feed(text)
+                if visible:
+                    pieces.append(visible)
+                    yield {"type": "token", "text": visible}
+            tail = think.flush()
+            if tail:
+                pieces.append(tail)
+                yield {"type": "token", "text": tail}
+            yield {"type": "_text", "text": "".join(pieces).strip()}
+        else:
+            yield {"type": "_text", "text": chain.invoke(payload).strip()}
+
+    def _drain(gen: Iterator[dict], out: list[dict]) -> str:
+        text = ""
+        for event in gen:
+            if event["type"] == "_text":
+                text = event["text"]
+            else:
+                out.append(event)
+        return text
+
+    yield {"type": "role", "name": "researcher"}
+    yield {"type": "artifact", "name": "research", "text": research_block}
+
+    yield {"type": "role", "name": "writer"}
+    pending: list[dict] = []
+    draft = _drain(
+        _run(writer, {"topic": topic, "research": research_block, "critique": ""}),
+        pending,
+    )
+    yield from pending
+    yield {"type": "artifact", "name": "draft", "text": draft}
+
+    yield {"type": "role", "name": "reviewer"}
+    pending = []
+    review = _drain(
+        _run(reviewer, {"topic": topic, "research": research_block, "draft": draft}),
+        pending,
+    )
+    yield from pending
     approved = parse_approved(review)
+    yield {"type": "artifact", "name": "review", "text": review, "approved": approved}
 
     revisions = 0
     while not approved and revisions < max_revisions:
         revisions += 1
-        draft = writer.invoke({
-            "topic": topic,
-            "research": research_block,
-            "critique": _critique_block(review),
-        }).strip()
-        review = reviewer.invoke(
-            {"topic": topic, "research": research_block, "draft": draft}
-        ).strip()
-        approved = parse_approved(review)
+        yield {"type": "revision", "n": revisions}
 
-    return MultiAgentResult(
+        yield {"type": "role", "name": "writer"}
+        pending = []
+        draft = _drain(
+            _run(writer, {
+                "topic": topic,
+                "research": research_block,
+                "critique": _critique_block(review),
+            }),
+            pending,
+        )
+        yield from pending
+        yield {"type": "artifact", "name": "draft", "text": draft}
+
+        yield {"type": "role", "name": "reviewer"}
+        pending = []
+        review = _drain(
+            _run(reviewer, {"topic": topic, "research": research_block, "draft": draft}),
+            pending,
+        )
+        yield from pending
+        approved = parse_approved(review)
+        yield {"type": "artifact", "name": "review", "text": review,
+               "approved": approved}
+
+    yield {"type": "final", "result": MultiAgentResult(
         draft=draft,
         review=review,
         approved=approved,
@@ -157,4 +247,4 @@ def orchestrate(
             "reviewer": review,
         },
         revisions=revisions,
-    )
+    )}

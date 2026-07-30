@@ -60,6 +60,17 @@ controlling spend anyway — the budget cap is the one that actually bounds cost
 `subagents_used` is read back out of the `Agent` tool calls, so it reflects what
 the lead *actually* delegated, not what it was told to do.
 
+## Traces and streaming
+
+`POST /run?trace=1` records the delegations
+([`docs/trace-format.md`](../../docs/trace-format.md)); `POST /run/stream`
+reports them live ([`docs/streaming.md`](../../docs/streaming.md)) — each `step`
+frame is an `Agent` call carrying a `subagent_type`, so you watch the lead hand
+work out. A real run emitted 4 delegations and 12 tool calls across 5 turns.
+
+You still cannot see *inside* a subagent — the harness runs it and returns only
+the result — and there are no `token` frames, because the SDK yields whole turns.
+
 ## Env vars (`.env.example`)
 
 | Var | Default | Meaning |

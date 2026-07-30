@@ -7,8 +7,8 @@
 happens, rather than after it finishes. A ReAct loop is the case where this
 matters most: you watch it reason, call a tool, read the result, and go again.
 
-Implemented on the **UC08** projects. Same event contract in all of them, so the
-four approaches can be compared frame for frame — the companion to
+Implemented on the **UC07** and **UC08** projects. Same event contract in all of
+them, so the four approaches can be compared frame for frame — the companion to
 [`trace-format.md`](trace-format.md), which records the same run after the fact.
 
 ## Events
@@ -83,6 +83,28 @@ runs a small incremental filter that holds back anything after a `<` until it
 either completes a tag or proves not to be one — a few characters of latency in
 exchange for a guarantee. A real run bears this out: the **first delta Ollama
 sends is literally `<think>`**.
+
+**1b. A plain function in an LCEL chain silently disables streaming.** LangChain
+wraps a bare callable in a `RunnableLambda`, which must materialise its whole
+input before it runs. So this:
+
+```python
+prompt | llm | StrOutputParser() | strip_thinking     # looks harmless
+```
+
+turns `chain.stream()` into a single chunk per chain — **measured: 2 token frames
+instead of 149**, with no error and no warning. The endpoint still "streams"; it
+just has nothing to stream.
+
+A *generator* function is treated as a transform instead — it receives the
+upstream iterator and yields as it goes, so streaming survives:
+
+```python
+prompt | llm | StrOutputParser() | strip_thinking_stream   # generator
+```
+
+`invoke()` still works either way; LangChain drains the generator. This is worth
+knowing before you add any post-processing step to a chain you intend to stream.
 
 **2. Your test client probably buffers.** FastAPI's `TestClient` collected all 56
 frames and delivered them at once — first frame and last frame at the same

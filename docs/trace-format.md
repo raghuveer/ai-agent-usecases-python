@@ -89,6 +89,11 @@ reports token usage but not price; only the Agent SDK reports real cost. Reporti
 a confident `0.0` for an unpriced run would be a lie, and the runs where it matters
 most are the expensive ones.
 
+## Where it is implemented
+
+`?trace=1` is available on the **UC07** and **UC08** projects, all four approaches.
+The rest still return only their answer.
+
 ## Sinks
 
 Set by env, defaulting to the least surprising thing:

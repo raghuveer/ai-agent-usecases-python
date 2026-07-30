@@ -220,6 +220,61 @@ async def stream_prompt(prompt: str) -> AsyncIterator[dict[str, Any]]:
     }
 
 
+async def iter_events(prompt: str, options: ClaudeAgentOptions):
+    """Yield loop events as the SDK produces them. See docs/streaming.md.
+
+    **This approach cannot stream tokens.** The SDK hands back whole
+    ``AssistantMessage``s, one per turn — there is no delta-level hook, because
+    the harness owns the model call. So a `turn` frame arrives when a turn
+    *completes*, and a `step` frame when the agent decides to call a tool.
+
+    For a multi-agent team the `step` frames ARE the delegations: each one is an
+    `Agent` tool call carrying a `subagent_type`, so you watch the lead hand
+    work to researcher / analyst / writer in real time. What you still cannot
+    see is inside a subagent — the harness runs it and returns the result.
+    """
+    stream = (
+        query(prompt=stream_prompt(prompt), options=options)
+        if options.can_use_tool is not None
+        else query(prompt=prompt, options=options)
+    )
+    result = AgentResult()
+    try:
+        async for message in stream:
+            if isinstance(message, AssistantMessage):
+                result.num_turns += 1
+                for block in message.content:
+                    if isinstance(block, TextBlock):
+                        yield {"type": "turn", "text": block.text}
+                    elif isinstance(block, ToolUseBlock):
+                        call = ToolCall(name=block.name, input=dict(block.input or {}))
+                        result.tool_calls.append(call)
+                        yield {
+                            "type": "step",
+                            "step": {
+                                "tool": call.name.split("__")[-1],
+                                "input": call.input,
+                            },
+                        }
+                    elif isinstance(block, ThinkingBlock):
+                        continue
+            elif isinstance(message, ResultMessage):
+                result.num_turns = message.num_turns
+                result.cost_usd = message.total_cost_usd or 0.0
+                result.is_error = bool(message.is_error)
+                result.stop_reason = message.stop_reason
+                if message.result:
+                    result.text = message.result
+    except Exception as exc:  # noqa: BLE001 - re-raised unless it is a known cap
+        reason = _cap_reason(str(exc))
+        if reason is None:
+            raise
+        result.is_error = True
+        result.stop_reason = reason
+
+    yield {"type": "final", "result": result}
+
+
 async def default_runner(prompt: str, options: ClaudeAgentOptions) -> AgentResult:
     """Production runner: drive a real agent loop via the SDK.
 
