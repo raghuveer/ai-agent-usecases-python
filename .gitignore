@@ -23,6 +23,10 @@ __pycache__/
 venv/
 env/
 
+# --- Traces (contain full prompts, i.e. whatever the caller sent) ---
+traces/
+**/traces/
+
 # --- Vector stores / databases / build artifacts ---
 .chroma/
 **/.chroma/

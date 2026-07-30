@@ -16,6 +16,9 @@ system prompt when the model id starts with ``qwen3``.
 """
 from __future__ import annotations
 
+import time
+from typing import Callable
+
 from openai import OpenAI
 
 from .settings import Settings
@@ -68,6 +71,18 @@ def apply_no_think(model: str, system_prompt: str) -> str:
     return model_profile(model)["thinking_prefix"] + system_prompt
 
 
+def _token_count(usage: object | None, field: str) -> int:
+    """A token count from a usage object, or 0 when it is absent or odd.
+
+    Not every OpenAI-compatible endpoint returns ``usage``, and a stubbed client
+    may return something that is not a number at all. Anything non-integer
+    becomes 0 rather than propagating into the trace, where it would be reported
+    as a token count and then fail to serialise.
+    """
+    value = getattr(usage, field, 0)
+    return value if isinstance(value, int) else 0
+
+
 def chat(
     client: OpenAI,
     *,
@@ -76,11 +91,17 @@ def chat(
     max_tokens: int = 384,
     temperature: float = 0.0,
     stop: list[str] | None = None,
+    on_call: Callable[[dict], None] | None = None,
 ) -> str:
     """Single chat call over a message list. Returns assistant text (stripped).
 
     The first message is assumed to be the system prompt; ``/no_think`` is
     applied to it for qwen3 models.
+
+    ``on_call`` receives a record of what actually went over the wire — the
+    final message list (after ``/no_think`` rewriting), the completion, token
+    usage, and elapsed ms. That is the hook the tracer uses; passing it is
+    optional and nothing here knows what a tracer is.
     """
     msgs = [dict(m) for m in messages]
     if msgs and msgs[0].get("role") == "system":
@@ -93,8 +114,24 @@ def chat(
     )
     if stop and model_profile(model)["supports_stop"]:
         kwargs["stop"] = stop
+    started = time.perf_counter()
     resp = client.chat.completions.create(**kwargs)
+    elapsed_ms = int((time.perf_counter() - started) * 1000)
     text = resp.choices[0].message.content or ""
     # Enforce the cut locally too: `stop` is advisory, and unsupported on some
     # endpoints, so the loop cannot depend on the server having honoured it.
-    return truncate_at_stop(text, stop) if stop else text.strip()
+    reply = truncate_at_stop(text, stop) if stop else text.strip()
+
+    if on_call is not None:
+        usage = getattr(resp, "usage", None)
+        on_call(
+            {
+                "messages": msgs,
+                "completion": reply,
+                "duration_ms": elapsed_ms,
+                "stop": kwargs.get("stop"),
+                "input_tokens": _token_count(usage, "prompt_tokens"),
+                "output_tokens": _token_count(usage, "completion_tokens"),
+            }
+        )
+    return reply

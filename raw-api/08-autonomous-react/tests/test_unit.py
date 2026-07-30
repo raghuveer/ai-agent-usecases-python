@@ -14,7 +14,10 @@ from unittest.mock import MagicMock
 
 from fastapi.testclient import TestClient
 
+import json
+
 from app import llm, react, tools
+from app import trace as trace_mod
 from app.main import create_app
 from app.settings import Settings
 
@@ -147,7 +150,12 @@ def _fake_openai_client(replies: list[str]) -> MagicMock:
         msg.content = text
         choice = MagicMock()
         choice.message = msg
-        return MagicMock(choices=[choice])
+        # Integer usage on purpose: a bare MagicMock would sail through as a
+        # "token count" and only blow up later at JSON serialisation.
+        return MagicMock(
+            choices=[choice],
+            usage=MagicMock(prompt_tokens=100, completion_tokens=20),
+        )
 
     client.chat.completions.create.side_effect = _create
     return client
@@ -218,3 +226,117 @@ def test_chat_sends_stop_for_models_that_support_it():
         stop=["Observation:"],
     )
     assert client.chat.completions.create.call_args.kwargs["stop"] == ["Observation:"]
+
+
+# --------------------------------------------------------------------------- #
+# Tracing (schema + privacy). See docs/trace-format.md
+# --------------------------------------------------------------------------- #
+def _traced_run(**settings_kw):
+    app = create_app()
+    app.state.settings = Settings(**settings_kw)
+    app.state.client = _fake_openai_client([
+        "Thought: search\nAction: search\nAction Input: return window",
+        "Thought: done\nFinal Answer: 30 days",
+    ])
+    return TestClient(app).post(
+        "/run?trace=1", json={"task": "return window?"}
+    ).json()
+
+
+def test_trace_absent_unless_requested():
+    app = create_app()
+    app.state.settings = Settings()
+    app.state.client = _fake_openai_client(["Thought: done\nFinal Answer: 30"])
+    body = TestClient(app).post("/run", json={"task": "x"}).json()
+    assert body["trace"] is None
+
+
+def test_trace_records_llm_and_tool_spans_in_order():
+    trace = _traced_run()["trace"]
+
+    assert trace["schema_version"] == 1
+    assert trace["approach"] == "raw-api"
+    assert trace["usecase"] == "08-autonomous-react"
+    # OTel GenAI naming, so this can be exported to Langfuse/Phoenix later.
+    assert trace["gen_ai"]["system"] == "openai"
+    assert trace["gen_ai"]["request"]["model"]
+
+    kinds = [(s["seq"], s["type"], s["name"]) for s in trace["spans"]]
+    assert kinds == [(1, "llm", "chat"), (2, "tool", "search"), (3, "llm", "chat")]
+
+    assert trace["outcome"]["stop_reason"] == "final_answer"
+    assert trace["outcome"]["steps"] == 2
+    assert trace["outcome"]["tool_calls"] == 1
+    # Unpriced endpoint: unknown, not free.
+    assert trace["outcome"]["cost_usd"] is None
+    # Usage totals roll up across the run's model calls (2 x 100/20).
+    assert trace["gen_ai"]["usage"] == {"input_tokens": 200, "output_tokens": 40}
+
+
+def test_trace_shows_exactly_what_was_sent_to_the_model():
+    """The point of the raw-api approach: every byte is visible."""
+    trace = _traced_run()["trace"]
+    first_llm = next(s for s in trace["spans"] if s["type"] == "llm")
+
+    roles = [m["role"] for m in first_llm["request"]["messages"]]
+    assert roles[:2] == ["system", "user"]
+    assert "Task: return window?" in first_llm["request"]["messages"][1]["content"]
+    assert "Action: search" in first_llm["response"]["content"]
+
+
+def test_trace_reflects_whether_stop_was_actually_sent():
+    """The trace must show the wire truth, not the intent.
+
+    `stop` is withheld from claude-* because the gateway 500s on it, so a trace
+    of a claude run must NOT claim a stop sequence was sent — that discrepancy
+    is exactly the kind of thing a trace exists to reveal.
+    """
+    claude = _traced_run(llm_model="claude-haiku")["trace"]
+    assert "stop" not in claude["spans"][0]["request"]
+
+    qwen = _traced_run(llm_model="qwen-local-coder")["trace"]
+    assert qwen["spans"][0]["request"]["stop"] == ["Observation:"]
+
+
+def test_trace_can_omit_prompt_bodies():
+    """Traces carry the caller's input, so content must be suppressible."""
+    trace = _traced_run(trace_include_prompts=False)["trace"]
+
+    for span in trace["spans"]:
+        body = span["request"].get("messages", span["request"].get("input"))
+        assert body == trace_mod.REDACTED, span
+        assert span["response"]["content"] == trace_mod.REDACTED
+    # Metadata survives redaction — that is what makes it still useful.
+    assert trace["outcome"]["tool_calls"] == 1
+    assert trace["spans"][0]["duration_ms"] >= 0
+
+
+def test_summarise_is_one_flat_row_per_run():
+    """The shape that aggregates across approaches and, later, frameworks."""
+    row = trace_mod.summarise(_traced_run()["trace"])
+    assert set(row) == {
+        "run_id", "ts", "approach", "usecase", "model", "status", "stop_reason",
+        "steps", "tool_calls", "input_tokens", "output_tokens", "cost_usd",
+        "duration_ms",
+    }
+    assert row["approach"] == "raw-api"
+    assert row["stop_reason"] == "final_answer"
+
+
+def test_file_sink_writes_run_and_appends_index(tmp_path):
+    app = create_app()
+    app.state.settings = Settings(trace_sink="file", trace_dir=str(tmp_path))
+    app.state.client = _fake_openai_client(["Thought: done\nFinal Answer: 30"])
+
+    body = TestClient(app).post("/run", json={"task": "x"}).json()
+    # Sink is independent of `?trace=1`: persisted, not returned.
+    assert body["trace"] is None
+
+    written = list(tmp_path.glob("*.json"))
+    assert len(written) == 1
+    doc = json.loads(written[0].read_text(encoding="utf-8"))
+    assert doc["schema_version"] == 1
+
+    rows = (tmp_path / "runs.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    assert len(rows) == 1
+    assert json.loads(rows[0])["run_id"] == doc["run_id"]

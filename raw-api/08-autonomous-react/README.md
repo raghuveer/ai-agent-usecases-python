@@ -53,7 +53,52 @@ The loop appends `Observation: <tool result>` after each tool call and stops on
 - `GET /health` → `{"status":"ok","approach":"raw-api","usecase":"08-autonomous-react"}`
 - `POST /run` body `{"task": str, "max_steps": int|null}` →
   `{"answer": str, "steps": [{thought, action, action_input, observation}],
-  "stopped_reason": "final_answer"|"max_steps"}`
+  "stopped_reason": "final_answer"|"max_steps", "trace": object|null}`
+- `POST /run?trace=1` — same, with `trace` populated. See below.
+
+## See what it actually did (`?trace=1`)
+
+The answer alone hides the interesting part. Add `?trace=1` and you get the
+run's decision trail: **the exact message list sent on every call**, each tool
+invocation and what it returned, per-call latency, and token usage.
+
+```bash
+curl -s -X POST 'localhost:8000/run?trace=1' \
+     -H 'content-type: application/json' \
+     -d '{"task":"return window doubled?"}' | jq '.trace.spans[] | {seq,type,name,duration_ms}'
+```
+
+A real run against `claude-haiku`:
+
+```
+1 llm  chat        2953ms
+2 tool search         0ms
+3 llm  chat        1423ms
+4 tool calculator     0ms
+5 llm  chat        1343ms
+
+usage: {input_tokens: 3469, output_tokens: 193}
+```
+
+Two things that trace makes obvious and the plain response does not:
+
+- **The loop is three model calls, not one.** Each one resends the whole
+  transcript, so input tokens grow every turn — 3,469 for a two-tool task.
+  Prompt caching does not pass through the gateway, so you pay for all of it.
+- **The tools are free and instant** (0 ms). Essentially all the latency and all
+  the cost is the model. That is the argument for keeping tool work deterministic.
+
+The format is shared by all four approaches, so the same question traced against
+`langchain/08`, `langgraph/08`, and `claude-agent-sdk/08` is directly
+comparable. Field names follow the OpenTelemetry GenAI conventions, so these
+traces can be exported to Langfuse / Phoenix / Jaeger with a small adapter —
+without any project depending on a tracing server. Schema and rationale:
+[`docs/trace-format.md`](../../docs/trace-format.md).
+
+> **Traces contain the caller's prompt.** Nothing is written to disk unless you
+> set `TRACE_SINK=file`, `traces/` is git-ignored, and
+> `TRACE_INCLUDE_PROMPTS=0` keeps timings and token counts while dropping
+> message bodies.
 
 ## Env vars (`.env.example`)
 
@@ -62,6 +107,9 @@ The loop appends `Observation: <tool result>` after each tool call and stops on
 | `LLM_BASE_URL` | `http://localhost:8080/v1` | OpenAI-compatible gateway |
 | `LLM_GATEWAY_KEY` | placeholder | `Authorization: Bearer` key |
 | `LLM_MODEL` | `claude-haiku` | model alias (qwen3 → `/no_think` auto-applied) |
+| `TRACE_SINK` | `none` | `none` \| `file` — disk only; `?trace=1` is independent |
+| `TRACE_DIR` | `traces` | where `file` writes `<run_id>.json` + `runs.jsonl` |
+| `TRACE_INCLUDE_PROMPTS` | `1` | `0` drops message bodies, keeps metadata |
 | `LLM_TEMPERATURE` | `0.0` | sampling temperature (0 = deterministic) |
 | `LLM_MAX_TOKENS` | per use case | max tokens for the primary generation |
 | `MAX_STEPS` | `6` | ReAct loop iteration cap |
