@@ -77,8 +77,7 @@ the lead *actually* delegated, not what it was told to do.
 ## Run
 
 ```bash
-python -m uv venv
-python -m uv pip install --python .venv/Scripts/python.exe -e ".[dev]"
+python -m uv sync --extra dev   # creates .venv, installs from uv.lock
 
 # Offline unit tests (no network, no key, no CLI):
 .venv/Scripts/python.exe -m pytest tests/test_unit.py -q

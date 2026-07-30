@@ -39,20 +39,18 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
-          # Every project installs with `uv pip install -e .` and ships no
-          # lockfile (see .gitignore), so setup-uv's default glob
-          # (**/uv.lock, **/requirements*.txt) matches nothing: it warns, and
-          # the cache key never changes, so the cache is never invalidated.
-          # Key it on the one file that does determine this project's
-          # dependency set — its own pyproject.toml.
-          cache-dependency-glob: ${{ matrix.project }}/pyproject.toml
+          # Key the cache on THIS project's lockfile, not the repo-wide default
+          # glob — otherwise a dependency change in any one project would
+          # invalidate the cache for all 44.
+          cache-dependency-glob: ${{ matrix.project }}/uv.lock
       - name: Set up Python
         run: uv python install 3.12
-      - name: Create venv + install (dev extras)
+      - name: Install from the lockfile (dev extras)
         working-directory: ${{ matrix.project }}
-        run: |
-          uv venv
-          uv pip install -e ".[dev]"
+        # `--locked` fails the build if uv.lock has drifted from pyproject.toml,
+        # which is the guarantee that makes committing lockfiles worth anything:
+        # a dependency edit without a re-lock cannot merge silently.
+        run: uv sync --extra dev --locked
       - name: Unit tests (offline, integration deselected)
         working-directory: ${{ matrix.project }}
         run: uv run pytest -q -m "not integration" tests/test_unit.py

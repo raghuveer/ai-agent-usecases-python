@@ -48,8 +48,7 @@ the deterministic ranking and the LLM "why" are two nodes of a small
 ## Run
 
 ```bash
-python -m uv venv
-python -m uv pip install --python .venv/Scripts/python.exe -e ".[dev]"
+python -m uv sync --extra dev   # creates .venv, installs from uv.lock
 
 # Offline unit tests (must pass with no network):
 .venv/Scripts/python.exe -m pytest tests/test_unit.py -q

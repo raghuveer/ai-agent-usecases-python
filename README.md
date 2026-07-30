@@ -104,10 +104,7 @@ Each project is independent and uses [`uv`](https://docs.astral.sh/uv/):
 cd raw-api/01-rag                 # pick any of the 40
 cp .env.example .env              # then edit .env: set LLM_GATEWAY_KEY (and LLM_MODEL if needed)
 
-uv venv
-# On Windows, pin uv to the venv interpreter explicitly:
-uv pip install --python .venv/Scripts/python.exe -e ".[dev]"
-#   (Linux/macOS: just `uv pip install -e ".[dev]"`)
+uv sync --extra dev                 # creates .venv, installs from uv.lock
 
 # Offline unit tests — mocked LLM, no network, no key needed:
 uv run pytest -q -m "not integration"
@@ -119,6 +116,12 @@ RUN_INTEGRATION=1 uv run pytest -q -m integration
 uv run uvicorn app.main:app --reload
 # → GET /health, POST /run   (see the project README for the request shape)
 ```
+
+> **Every project commits a `uv.lock`**, so `uv sync` reproduces the exact dependency
+> set the tests were run against rather than re-resolving whatever is newest. CI installs
+> with `uv sync --locked`, which fails the build if a `pyproject.toml` is edited without
+> re-locking — so the lockfiles cannot silently drift. After changing dependencies, run
+> `uv lock` in that project and commit the result.
 
 ## Testing model
 

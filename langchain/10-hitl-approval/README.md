@@ -47,8 +47,7 @@ at the node. Here the "pause" is application-level bookkeeping the developer own
 ## Run
 
 ```bash
-python -m uv venv
-python -m uv pip install --python .venv/Scripts/python.exe -e ".[dev]"
+python -m uv sync --extra dev   # creates .venv, installs from uv.lock
 
 # Offline unit tests (must pass with no network):
 .venv/Scripts/python.exe -m pytest tests/test_unit.py -q

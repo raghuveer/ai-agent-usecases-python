@@ -32,8 +32,7 @@ rename it (`raw-api/NN-something/`), and grow `app/` into the real logic.
 ## Run
 
 ```bash
-python -m uv venv
-python -m uv pip install -e ".[dev]"
+python -m uv sync --extra dev   # creates .venv, installs from uv.lock
 python -m pytest tests/test_unit.py -q          # offline, must pass
 python -m uvicorn app.main:app --reload         # needs a live gateway
 ```

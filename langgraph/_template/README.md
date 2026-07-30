@@ -30,8 +30,7 @@ standard HTTP surface.
 ## Run
 
 ```bash
-python -m uv venv
-python -m uv pip install -e ".[dev]"
+python -m uv sync --extra dev   # creates .venv, installs from uv.lock
 python -m pytest tests/test_unit.py -q        # offline, mocked
 uvicorn app.main:app --reload                 # needs a live gateway
 ```

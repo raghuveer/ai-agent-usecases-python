@@ -47,8 +47,7 @@ product/return/warranty/support docs), built the **langchain** way: a
 ## Run
 
 ```bash
-python -m uv venv
-python -m uv pip install -e .
+python -m uv sync --extra dev   # creates .venv, installs from uv.lock
 
 # offline, mocked — no network:
 python -m pytest tests/test_unit.py -q

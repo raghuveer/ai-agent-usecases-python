@@ -30,8 +30,7 @@ See `.env.example`:
 ## Run
 
 ```bash
-python -m uv venv
-python -m uv pip install -e .
+python -m uv sync --extra dev   # creates .venv, installs from uv.lock
 python -m pytest tests/test_unit.py -q          # offline, mocked
 
 # live (needs the local gateway running):

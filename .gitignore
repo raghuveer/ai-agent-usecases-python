@@ -13,11 +13,9 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 
-# --- uv resolver artifacts ---
-# Every project installs with `uv pip install -e .` (see each README), which does
-# not read uv.lock. A stray lockfile only drifts from pyproject.toml.
-uv.lock
-**/uv.lock
+# NOTE: uv.lock is deliberately COMMITTED for every project — each one is
+# installed with `uv sync`, so the lockfile is what pins the dependency set.
+# Do not add it here.
 
 # --- Virtual environments ---
 .venv/

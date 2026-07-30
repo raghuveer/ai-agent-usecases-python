@@ -31,8 +31,7 @@ Prior turns of a session are fed back into both the classifier and responder.
 ## Setup & tests
 
 ```sh
-python -m uv venv
-python -m uv pip install --python .venv/Scripts/python.exe -e ".[dev]"
+python -m uv sync --extra dev   # creates .venv, installs from uv.lock
 
 # Unit tests (offline, fully mocked):
 .venv/Scripts/python.exe -m pytest tests/test_unit.py -q

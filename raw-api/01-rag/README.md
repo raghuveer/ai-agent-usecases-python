@@ -49,8 +49,7 @@ building, and the chat call all hand-written so you can see exactly what is sent
 ## Run
 
 ```bash
-python -m uv venv
-python -m uv pip install -e ".[dev]"
+python -m uv sync --extra dev   # creates .venv, installs from uv.lock
 
 # Offline unit tests (must pass with no network):
 python -m pytest tests/test_unit.py -q
