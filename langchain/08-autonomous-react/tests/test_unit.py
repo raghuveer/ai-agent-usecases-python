@@ -168,3 +168,50 @@ def test_loop_ignores_a_model_supplied_observation():
 
     assert result.answer != "999"
     assert "999" not in result.steps[0].observation
+
+
+# --------------------------------------------------------------------------- #
+# Tracing — attached via LangChain callbacks. See docs/trace-format.md
+# --------------------------------------------------------------------------- #
+_TRACE_SCRIPT = [
+    "Thought: look it up\nAction: search\nAction Input: return window",
+    "Thought: done\nFinal Answer: 30 days",
+]
+
+
+def test_trace_absent_unless_requested():
+    body = make_client(_TRACE_SCRIPT).post("/run", json={"task": "x"}).json()
+    assert body["trace"] is None
+
+
+def test_trace_records_llm_and_tool_spans_via_callbacks():
+    """The loop is untouched: these spans come from LangChain's own callbacks."""
+    trace = make_client(_TRACE_SCRIPT).post(
+        "/run?trace=1", json={"task": "return window?"}
+    ).json()["trace"]
+
+    assert trace["schema_version"] == 1
+    assert trace["approach"] == "langchain"
+    assert [(s["seq"], s["type"], s["name"]) for s in trace["spans"]] == [
+        (1, "llm", "chat"),
+        (2, "tool", "search"),
+        (3, "llm", "chat"),
+    ]
+    assert trace["outcome"]["stop_reason"] == "final_answer"
+    assert trace["outcome"]["tool_calls"] == 1
+
+
+def test_trace_uses_otel_role_names_not_langchain_ones():
+    """LangChain says human/ai; the trace must say user/assistant.
+
+    Without this, a langchain trace would not line up field-for-field with a
+    raw-api one — which is the entire purpose of a shared format.
+    """
+    trace = make_client(_TRACE_SCRIPT).post(
+        "/run?trace=1", json={"task": "x"}
+    ).json()["trace"]
+
+    roles = {m["role"] for s in trace["spans"] if s["type"] == "llm"
+             for m in s["request"]["messages"]}
+    assert roles <= {"system", "user", "assistant", "tool"}
+    assert "human" not in roles and "ai" not in roles

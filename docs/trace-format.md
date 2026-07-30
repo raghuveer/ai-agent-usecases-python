@@ -114,6 +114,36 @@ Per-run JSON is for reading one run. Comparing runs wants one row each:
 Concatenate those across approaches — or later across repos and frameworks — and
 you have something you can actually aggregate, with no database involved.
 
+## What it shows, with all four implemented (UC08, measured)
+
+Same use case, `claude-haiku`, traced through each approach:
+
+| | raw-api | langchain | langgraph | claude-agent-sdk |
+|---|---|---|---|---|
+| Model calls visible | 3 | 3 | 3 | ✗ (4 *turns*) |
+| Exact messages sent | ✅ | ✅ | ✅ | ✗ harness-built |
+| Tool results | ✅ | ✅ | ✅ | ✗ harness-internal |
+| Per-call latency | ✅ | ✅ | ✅ | ✗ |
+| Input / output tokens | 3469 / 193 | 3469 / 193 | 3469 / 193 | ✗ not reported |
+| Real cost | ✗ unpriced | ✗ unpriced | ✗ unpriced | ✅ $0.42278 |
+| Graph route | — | — | ✅ `reason→act→observe→…` | — |
+| How it attaches | hand-instrumented | callback handler | callbacks in graph config | read off the result |
+
+Three findings fall straight out of that table:
+
+1. **The three framework-free-ish approaches send byte-identical payloads.**
+   3,469 / 193 across raw-api, langchain, and langgraph — LangChain and LangGraph
+   add no prompt overhead for this use case. That is usually assumed, rarely
+   measured.
+2. **Visibility is inversely proportional to how much loop the framework wrote
+   for you.** The Agent SDK needs the least code and can tell you the least.
+   Nulls, not zeros, are how the format says so.
+3. **Only the SDK can report real cost** — and that run cost **$0.42** against a
+   few tenths of a cent for the others on the same model, because the harness
+   prompt is re-paid every turn with no caching through the gateway. (Different
+   task phrasing, so not a controlled benchmark — but the order of magnitude is
+   consistent with the code-gen measurements in the root README.)
+
 ## Privacy
 
 **A trace contains the full prompt, which contains the user's input.** Treat

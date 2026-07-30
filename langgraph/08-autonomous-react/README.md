@@ -57,7 +57,36 @@ Action Input: <single-line input>
 - `GET /health` → `{"status":"ok","approach":"langgraph","usecase":"08-autonomous-react"}`
 - `POST /run` body `{"task": str, "max_steps": int|null}` →
   `{"answer": str, "steps": [{thought, action, action_input, observation}],
-  "stopped_reason": "final_answer"|"max_steps"}`
+  "stopped_reason": "final_answer"|"max_steps", "trace": object|null}`
+- `POST /run?trace=1` — same, with `trace` populated. See below.
+
+## See what it actually did (`?trace=1`)
+
+The shared format ([`docs/trace-format.md`](../../docs/trace-format.md)) plus one
+field only this approach can produce: **`graph_path`, the nodes actually
+visited**. The other three have a call sequence; this one has a *route*.
+
+A real run against `claude-haiku`:
+
+```
+spans      : llm chat · tool search · llm chat · tool calculator · llm chat
+graph_path : reason → act → observe → reason → act → observe → reason
+usage      : {input_tokens: 3469, output_tokens: 193}
+```
+
+The cycle is right there in the path — and an early exit shows up as its
+absence: a task the model answers immediately traces as `graph_path: ["reason"]`
+with zero tool calls. That is the structural claim of this approach made
+checkable instead of asserted.
+
+Getting it required one real detail: **callbacks must go in the graph's run
+config, not on the model.** LangGraph reports the executing node via
+`metadata["langgraph_node"]` on chain events, so a handler attached to the LLM
+records every model call and none of the route. Hence `run_react(...,
+callbacks=[...])`, which forwards them into `graph.invoke(config=...)`.
+
+Token usage is identical to `raw-api/08` and `langchain/08` (3,469 / 193): the
+graph changes the control flow, not the payload.
 
 ## Env vars (`.env.example`)
 

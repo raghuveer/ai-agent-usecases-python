@@ -128,6 +128,34 @@ exposed a defect the earlier passes had hidden.
     propagate rather than being swallowed, and a capped team run still surfaces
     its report. Verified with three consecutive live UC07 runs, all green.
 
+## Measured: what a trace shows (UC08, all four approaches, 2026-07-30)
+
+`?trace=1` is implemented on UC08 across all four approaches (see
+`docs/trace-format.md`). Running the same use case through each, live on
+`claude-haiku`, produced the first hard numbers for the comparison this repo
+exists to make:
+
+- **raw-api, langchain and langgraph send byte-identical payloads** — 3,469 input
+  / 193 output tokens each. LangChain and LangGraph add no prompt overhead here.
+  Commonly assumed, rarely measured.
+- **Visibility falls as the framework writes more of your loop.** The three
+  loop-owning approaches record exact messages, tool results, and per-call
+  latency. The Agent SDK records none of those — it does not expose them — so its
+  trace marks them `null` and lists them in `not_captured`. Zeros would have read
+  as measurements.
+- **Only the Agent SDK reports real cost**, and that run cost **$0.42** versus a
+  few tenths of a cent for the same model elsewhere: the harness prompt is
+  re-paid every turn with no caching through the gateway. Task phrasing differs,
+  so it is not a controlled benchmark, but it matches the code-gen figures.
+- **Only langgraph can report a route.** `graph_path` shows the cycle
+  (`reason→act→observe→reason…`), and an early exit shows up as `["reason"]` with
+  zero tool calls — the structural claim of that approach made checkable.
+
+Instrumentation differed per approach and that is itself the lesson: raw-api is
+hand-instrumented, langchain attaches a callback handler, langgraph must put
+callbacks in the *graph run config* (node identity only appears there), and the
+Agent SDK can only be read off the finished result.
+
 ## Status
 - **10/10 use cases × 4 approaches = 40 projects built.**
 - `claude-agent-sdk`: **131 offline unit tests green**. **All 14 integration tests verified live and passing — all 10 use cases.** Two live passes found 8 defects plus 1 test bug; every one is fixed, and the security-relevant ones (F10, F11, F14) are in `docs/security-review.md`.

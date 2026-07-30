@@ -51,7 +51,44 @@ last `Action`/`Action Input`, invokes the matching `Tool`, threads back
 - `GET /health` → `{"status":"ok","approach":"langchain","usecase":"08-autonomous-react"}`
 - `POST /run` body `{"task": str, "max_steps": int|null}` →
   `{"answer": str, "steps": [{thought, action, action_input, observation}],
-  "stopped_reason": "final_answer"|"max_steps"}`
+  "stopped_reason": "final_answer"|"max_steps", "trace": object|null}`
+- `POST /run?trace=1` — same, with `trace` populated. See below.
+
+## See what it actually did (`?trace=1`)
+
+Same shared format as the other three approaches
+([`docs/trace-format.md`](../../docs/trace-format.md)) — but note *how* it is
+collected here. The raw-api version instruments its HTTP call by hand. LangChain
+already has an observation seam, so the tracer attaches as a callback:
+
+```python
+llm = llm.with_config(callbacks=[TracingCallbackHandler(tracer)])
+tools = [Tool(name=t.name, func=t.func, description=t.description,
+              callbacks=[handler]) for t in tools]
+```
+
+**The ReAct loop is not modified at all.** That is the trade: less plumbing to
+write, and the exact request is now whatever LangChain assembled rather than
+something you can read off the call site.
+
+A real run against `claude-haiku`, same task as `raw-api/08`:
+
+```
+1 llm  chat        1784ms      usage: {input_tokens: 3469, output_tokens: 193}
+2 tool search         0ms
+3 llm  chat        6029ms
+4 tool calculator     0ms
+5 llm  chat        1470ms
+```
+
+**Identical token usage to the hand-written version** (3,469 / 193). The
+framework costs you nothing in prompt overhead for this use case — worth knowing,
+because it is the sort of thing people assume rather than measure.
+
+One detail the format forces: LangChain names message roles `human`/`ai`, so the
+handler maps them to the OpenTelemetry/OpenAI names (`user`/`assistant`).
+Otherwise a langchain trace would not line up field-for-field with a raw-api one,
+and the comparison would quietly break.
 
 ## Env vars (`.env.example`)
 

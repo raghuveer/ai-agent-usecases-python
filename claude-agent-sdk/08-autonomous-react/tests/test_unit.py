@@ -150,3 +150,55 @@ async def test_options_register_tools_and_raise_turn_ceiling():
         "mcp__metrics__calculate",
     ]
     assert seen["max_turns"] >= 8
+
+
+# --------------------------------------------------------------------------- #
+# Tracing — deliberately partial. See app/trace.py and docs/trace-format.md
+# --------------------------------------------------------------------------- #
+def test_trace_absent_unless_requested():
+    assert make_client().post("/run", json={"question": "x"}).json()["run_trace"] is None
+
+
+def test_trace_reports_tool_calls_and_real_cost():
+    trace = make_client().post(
+        "/run?trace=1", json={"question": "x"}
+    ).json()["run_trace"]
+
+    assert trace["schema_version"] == 1
+    assert trace["approach"] == "claude-agent-sdk"
+    # This approach talks the Anthropic protocol, not the OpenAI one.
+    assert trace["gen_ai"]["system"] == "anthropic"
+    assert [(s["type"], s["name"]) for s in trace["spans"]] == [
+        ("tool", "lookup_metric"),
+        ("tool", "calculate"),
+    ]
+    # The one number this approach knows better than the other three.
+    assert trace["outcome"]["cost_usd"] == 0.004
+    assert trace["outcome"]["steps"] == 4  # turns, not model calls
+
+
+def test_trace_marks_what_the_sdk_cannot_expose_as_absent_not_zero():
+    """The asymmetry is the finding: no loop of your own, no visibility.
+
+    A zero token count would read as a measurement ("this run was free"), so the
+    unknowable fields are null and listed explicitly in `not_captured`.
+    """
+    trace = make_client().post(
+        "/run?trace=1", json={"question": "x"}
+    ).json()["run_trace"]
+
+    assert trace["gen_ai"]["usage"] == {"input_tokens": None, "output_tokens": None}
+    for span in trace["spans"]:
+        assert span["response"] is None      # the harness kept the tool result
+        assert span["duration_ms"] is None   # per-call latency is unobservable
+        assert "messages" not in span.get("request", {})
+
+    assert len(trace["not_captured"]) == 4
+
+
+def test_capped_run_is_traced_as_capped():
+    trace = make_client(stop_reason="max_turns").post(
+        "/run?trace=1", json={"question": "x"}
+    ).json()["run_trace"]
+    assert trace["outcome"]["status"] == "capped"
+    assert trace["outcome"]["stop_reason"] == "max_turns"

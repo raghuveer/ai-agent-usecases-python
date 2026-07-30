@@ -10,6 +10,7 @@ from typing import Any
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
+from . import trace as trace_mod
 from .agent import Runner
 from .react_agent import METRICS, run_react
 from .settings import get_settings
@@ -33,6 +34,11 @@ class RunResponse(BaseModel):
     num_turns: int
     cost_usd: float
     hit_turn_limit: bool
+    # The shared trace document (docs/trace-format.md), present only with
+    # `?trace=1`. Named `run_trace` because this project already shipped `trace`
+    # as its tool-call list; renaming that would break existing callers. The
+    # cross-approach comparison uses the document, not the field name.
+    run_trace: dict[str, Any] | None = None
 
 
 def create_app(runner: Runner | None = None) -> FastAPI:
@@ -52,14 +58,43 @@ def create_app(runner: Runner | None = None) -> FastAPI:
         return METRICS
 
     @app.post("/run", response_model=RunResponse)
-    async def run(req: RunRequest) -> RunResponse:
+    async def run(req: RunRequest, trace: bool = False) -> RunResponse:
+        """Run the agent. ``?trace=1`` returns what the SDK was willing to tell us.
+
+        Deliberately less than the other three approaches can report — see
+        app/trace.py and the `not_captured` list in the response.
+        """
+        settings = app.state.settings
         out = await run_react(req.question, settings, app.state.runner)
+
+        doc = None
+        if trace or settings.trace_sink != "none":
+            tracer = trace_mod.Tracer(
+                approach=APPROACH,
+                usecase=USECASE,
+                model=settings.llm_model,
+                max_turns=settings.agent_max_turns,
+                max_budget_usd=settings.agent_max_budget_usd,
+                include_prompts=settings.trace_include_prompts,
+            )
+            for step in out.trace:
+                tracer.tool_span(name=step.tool, tool_input=step.input)
+            doc = tracer.finish(
+                status="capped" if out.hit_turn_limit else "ok",
+                stop_reason="max_turns" if out.hit_turn_limit else "final_answer",
+                num_turns=out.num_turns,
+                cost_usd=out.cost_usd,
+            )
+            if settings.trace_sink == "file":
+                trace_mod.persist(doc, settings.trace_dir)
+
         return RunResponse(
             answer=out.answer,
             trace=[StepModel(tool=s.tool, input=s.input) for s in out.trace],
             num_turns=out.num_turns,
             cost_usd=out.cost_usd,
             hit_turn_limit=out.hit_turn_limit,
+            run_trace=doc if trace else None,
         )
 
     return app

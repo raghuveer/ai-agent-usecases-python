@@ -170,3 +170,44 @@ def test_graph_ignores_a_model_supplied_observation():
 
     assert result["answer"] != "999"
     assert "999" not in result["steps"][0]["observation"]
+
+
+# --------------------------------------------------------------------------- #
+# Tracing — including the graph route. See docs/trace-format.md
+# --------------------------------------------------------------------------- #
+_TRACE_SCRIPT = [
+    "Thought: look it up\nAction: search\nAction Input: return window",
+    "Thought: done\nFinal Answer: 30 days",
+]
+
+
+def test_trace_absent_unless_requested():
+    body = make_client(_TRACE_SCRIPT).post("/run", json={"task": "x"}).json()
+    assert body["trace"] is None
+
+
+def test_trace_records_spans_and_the_graph_route():
+    """`graph_path` is what this approach has and the other three do not."""
+    trace = make_client(_TRACE_SCRIPT).post(
+        "/run?trace=1", json={"task": "return window?"}
+    ).json()["trace"]
+
+    assert trace["approach"] == "langgraph"
+    assert [(s["seq"], s["type"], s["name"]) for s in trace["spans"]] == [
+        (1, "llm", "chat"),
+        (2, "tool", "search"),
+        (3, "llm", "chat"),
+    ]
+    # The cycle is visible: reason -> act -> observe -> reason.
+    assert trace["graph_path"] == ["reason", "act", "observe", "reason"]
+    assert trace["outcome"]["stop_reason"] == "final_answer"
+
+
+def test_graph_path_shows_an_early_exit_as_a_shorter_route():
+    """A run that answers immediately never visits act/observe."""
+    trace = make_client(["Final Answer: 30 days"]).post(
+        "/run?trace=1", json={"task": "x"}
+    ).json()["trace"]
+
+    assert trace["graph_path"] == ["reason"]
+    assert trace["outcome"]["tool_calls"] == 0

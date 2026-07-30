@@ -43,7 +43,53 @@ exceptions, so the agent can correct itself instead of the run dying.
 - `GET /metrics` → the fixed warehouse the agent must query through tools
 - `POST /run` body `{"question": str}` →
   `{"answer": str, "trace": [{"tool": str, "input": {...}}], "num_turns": int,
-    "cost_usd": float, "hit_turn_limit": bool}`
+    "cost_usd": float, "hit_turn_limit": bool, "run_trace": object|null}`
+- `POST /run?trace=1` — same, with `run_trace` populated. See below.
+  (It is `run_trace`, not `trace`, because this project already shipped `trace`
+  as its tool-call list; the cross-approach comparison uses the document.)
+
+## See what it actually did — and what you *cannot* see (`?trace=1`)
+
+This is the most interesting trace in the repo, because of what is missing from
+it. The other three approaches own their loop, so they record the exact message
+list of every model call, each tool's result, and per-call latency. Here the SDK
+owns the loop and reports tool calls plus run totals. Nothing else.
+
+A real run:
+
+```
+spans   : tool lookup_metric · tool lookup_metric · tool lookup_metric
+          (duration_ms: null, response: null — for every one)
+usage   : {input_tokens: null, output_tokens: null}
+outcome : {steps: 4 turns, tool_calls: 3, cost_usd: 0.42278}
+```
+
+Those nulls are deliberate. The unknowable fields are `null` and enumerated in
+`not_captured`, never zero — a `0` token count reads as a measurement ("this run
+was free"), which is false. **Absent data must look absent.**
+
+```jsonc
+"not_captured": [
+  "request.messages: the SDK builds each request inside the harness",
+  "tool results: the harness executes tools and feeds output back internally",
+  "gen_ai.usage: the SDK reports cost, not token counts",
+  "per-call latency: only whole-run duration is observable"
+]
+```
+
+**The trade, stated plainly:** you write no loop, so you cannot see inside it.
+That is the honest cost of the approach, and it is invisible until you try to
+trace it.
+
+What this approach knows that the others cannot is the one number that matters
+for a budget: a real `cost_usd`. The other three report token counts and `null`
+cost, because an OpenAI-compatible endpoint does not price the call.
+
+> **Worth noting: that run cost $0.42.** The same use case on `raw-api/08` used
+> 3,469 input tokens on the same `claude-haiku` — a few tenths of a cent. The
+> tasks differ slightly, so this is not a controlled benchmark, but the gap is
+> the harness prompt being re-paid every turn with no caching through the
+> gateway (see the root README's cost note). Budget agent-SDK runs accordingly.
 
 `trace` is the observed sequence of tool calls — the ReAct trajectory, read back
 from what the agent actually did. `hit_turn_limit` is reported rather than

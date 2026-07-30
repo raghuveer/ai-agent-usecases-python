@@ -11,16 +11,46 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
+import time
+from typing import Any
+
 from fastapi import FastAPI
 from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel, Field
 
+from . import react as react_mod
+from . import trace as trace_mod
 from .llm import build_llm
 from .react import run_react
 from .settings import get_settings
 
 APPROACH = "langgraph"
 USECASE = "08-autonomous-react"
+
+
+def _traced_tools(tools: dict, tracer: trace_mod.Tracer) -> dict:
+    """Wrap the tool registry so every invocation records a span.
+
+    The tools are plain callables here (not LangChain ``Tool`` objects), so they
+    emit no callbacks of their own — wrapping is how their spans get recorded,
+    exactly as in `raw-api/08`. The graph itself stays untouched.
+    """
+    wrapped: dict = {}
+    for name, (fn, description) in tools.items():
+
+        def traced(arg: str, _fn=fn, _name=name) -> str:
+            started = time.perf_counter()
+            output = _fn(arg)
+            tracer.tool_span(
+                name=_name,
+                tool_input=arg,
+                output=output,
+                duration_ms=int((time.perf_counter() - started) * 1000),
+            )
+            return output
+
+        wrapped[name] = (traced, description)
+    return wrapped
 
 
 class RunRequest(BaseModel):
@@ -39,6 +69,9 @@ class RunResponse(BaseModel):
     answer: str
     steps: list[StepModel]
     stopped_reason: str
+    # Present only when the caller asks for it with `?trace=1`.
+    # Schema: docs/trace-format.md (plus `graph_path`, specific to this approach)
+    trace: dict[str, Any] | None = None
 
 
 def create_app(llm: BaseChatModel | None = None) -> FastAPI:
@@ -59,13 +92,58 @@ def create_app(llm: BaseChatModel | None = None) -> FastAPI:
         return {"status": "ok", "approach": APPROACH, "usecase": USECASE}
 
     @app.post("/run", response_model=RunResponse)
-    def run(req: RunRequest) -> RunResponse:
+    def run(req: RunRequest, trace: bool = False) -> RunResponse:
+        """Run the graph. ``?trace=1`` returns what the agent actually did.
+
+        The trace here also carries ``graph_path`` — the nodes actually visited.
+        That is the thing this approach has and the others do not.
+        """
         max_steps = req.max_steps if req.max_steps is not None else settings.max_steps
-        result = run_react(req.task, llm=app.state.llm, max_steps=max_steps)
+        llm = app.state.llm
+        tools = None
+
+        recording = trace or settings.trace_sink != "none"
+        tracer = None
+        callbacks = None
+        if recording:
+            tracer = trace_mod.Tracer(
+                approach=APPROACH,
+                usecase=USECASE,
+                model=settings.llm_model,
+                temperature=settings.llm_temperature,
+                max_tokens=settings.llm_max_tokens,
+                include_prompts=settings.trace_include_prompts,
+            )
+            # One handler, passed through the graph's run config: it sees the
+            # node transitions AND the model calls underneath them. Attaching it
+            # to the model instead would record the calls but lose the route.
+            callbacks = [trace_mod.TracingCallbackHandler(tracer)]
+            tools = _traced_tools(react_mod.TOOLS, tracer)
+
+        result = run_react(
+            req.task,
+            llm=llm,
+            tools=tools,
+            max_steps=max_steps,
+            callbacks=callbacks,
+        )
+
+        doc = None
+        if tracer is not None:
+            doc = tracer.finish(
+                status=(
+                    "ok" if result["stopped_reason"] == "final_answer" else "capped"
+                ),
+                stop_reason=result["stopped_reason"],
+            )
+            if settings.trace_sink == "file":
+                trace_mod.persist(doc, settings.trace_dir)
+
         return RunResponse(
             answer=result["answer"],
             steps=[StepModel(**s) for s in result["steps"]],
             stopped_reason=result["stopped_reason"],
+            trace=doc if trace else None,
         )
 
     return app

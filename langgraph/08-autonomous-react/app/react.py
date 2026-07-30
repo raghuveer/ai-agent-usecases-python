@@ -224,10 +224,15 @@ def run_react(
     llm: BaseChatModel,
     tools: ToolRegistry | None = None,
     max_steps: int = 6,
+    callbacks: list | None = None,
 ) -> dict:
     """Run the compiled graph and return a normalised result dict.
 
     Returns ``{"answer", "steps", "stopped_reason"}``.
+
+    ``callbacks`` go in the graph's run config rather than on the model, because
+    that is the only place LangGraph reports which *node* is executing — which is
+    what makes the route observable (see app/trace.py).
     """
     tools = tools if tools is not None else TOOLS
     graph = build_react_graph(llm, tools)
@@ -247,7 +252,10 @@ def run_react(
         "last_observation": None,
     }
     # recursion_limit must allow reason+act+observe per step (3 nodes/cycle).
-    out = graph.invoke(init, config={"recursion_limit": max_steps * 3 + 5})
+    config: dict = {"recursion_limit": max_steps * 3 + 5}
+    if callbacks:
+        config["callbacks"] = callbacks
+    out = graph.invoke(init, config=config)
 
     steps = out.get("steps", [])
     stopped_reason = out.get("stopped_reason")
