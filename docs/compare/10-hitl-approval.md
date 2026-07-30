@@ -8,7 +8,7 @@ Every approach here solves an identical task with identical tools. What differs 
 
 | Approach | `app/` lines | Core symbol | The trade |
 |---|---:|---|---|
-| [`raw-api`](../../raw-api/10-hitl-approval) | 393 | `app/hitl.py::start_run` | A hand-built checkpoint store plus a /resume endpoint. |
+| [`raw-api`](../../raw-api/10-hitl-approval) | 649 | `app/hitl.py::start_run` | A hand-built checkpoint store plus a /resume endpoint. |
 | [`langchain`](../../langchain/10-hitl-approval) | 440 | `app/hitl.py::start_run` | A callback workaround: the framework has no native pause. |
 | [`langgraph`](../../langgraph/10-hitl-approval) | 451 | `app/hitl.py::build_approval_graph` | `interrupt()` — a durable pause the graph resumes from. |
 | [`claude-agent-sdk`](../../claude-agent-sdk/10-hitl-approval) | 636 | `app/approval.py::start_run` | `can_use_tool` gates the action, but only in-process. |

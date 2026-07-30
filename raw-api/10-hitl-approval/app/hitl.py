@@ -25,7 +25,7 @@ from __future__ import annotations
 import threading
 import uuid
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Callable, Iterator, Optional
 
 LLMCall = Callable[[str], str]
 
@@ -85,6 +85,59 @@ class CheckpointStore:
 # --------------------------------------------------------------------------- #
 # Phase 1 — draft then pause.
 # --------------------------------------------------------------------------- #
+def iter_start_run(
+    request: str, *, llm_stream, store: CheckpointStore
+) -> Iterator[dict]:
+    """Draft with streaming, then park. See docs/streaming.md.
+
+    Yields ``token`` events while the draft is written, then a single
+    ``awaiting_approval`` event carrying the run id — **and stops there**.
+
+    The stream deliberately ends at the gate. Holding a connection open across a
+    human decision is exactly the fragility a durable approval workflow exists to
+    avoid: the approver may take minutes or days, and any dropped socket, proxy
+    timeout or server restart would lose the run. The checkpoint is the contract;
+    the connection is not. `POST /resume/stream` opens a fresh stream once the
+    decision arrives.
+    """
+    pieces: list[str] = []
+    for piece in llm_stream(draft_prompt(request)):
+        pieces.append(piece)
+        yield {"type": "token", "text": piece}
+
+    proposed = "".join(pieces).strip() or "(the model returned an empty draft)"
+    run = PausedRun(
+        run_id=uuid.uuid4().hex,
+        request=request,
+        proposed_action=proposed,
+    )
+    store.save(run)
+    yield {
+        "type": "awaiting_approval",
+        "run_id": run.run_id,
+        "proposed_action": run.proposed_action,
+    }
+
+
+def iter_resume_run(
+    run_id: str,
+    *,
+    approved: bool,
+    store: CheckpointStore,
+    feedback: str | None = None,
+) -> Iterator[dict]:
+    """Resume a parked run as a (short) second stream.
+
+    Emits the decision, then the outcome. No ``token`` events here: approving
+    executes the already-drafted action rather than generating new text — which
+    is itself the point of the gate. The human approved *that* text, so nothing
+    may be regenerated after the fact.
+    """
+    yield {"type": "decision", "approved": approved}
+    outcome = resume_run(run_id, approved=approved, store=store, feedback=feedback)
+    yield {"type": "final", "result": outcome}
+
+
 def start_run(request: str, *, llm_call: LLMCall, store: CheckpointStore) -> PausedRun:
     """Draft the proposed action and persist a paused run. Returns the PausedRun."""
     proposed = llm_call(draft_prompt(request)).strip()

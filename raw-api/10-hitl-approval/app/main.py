@@ -15,12 +15,17 @@ a stub client so nothing hits the network.
 """
 from __future__ import annotations
 
+import json
+from typing import Any
+
 from contextlib import asynccontextmanager
 
+from fastapi.responses import StreamingResponse
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from . import hitl, llm
+from . import trace as trace_mod
 from .settings import get_settings
 
 APPROACH = "raw-api"
@@ -35,6 +40,8 @@ class RunResponse(BaseModel):
     run_id: str
     status: str
     proposed_action: str
+    # Present only with `?trace=1`. Schema: docs/trace-format.md
+    trace: dict[str, Any] | None = None
 
 
 class ResumeRequest(BaseModel):
@@ -48,6 +55,18 @@ class ResumeResponse(BaseModel):
     result: str | None = None
     feedback: str | None = None
 
+
+def _sse(event: dict) -> str:
+    """Format one HITL event as a server-sent event frame.
+
+    The `awaiting_approval` frame is the last one a run emits before the human
+    decides — see docs/streaming.md for why the stream ends there.
+    """
+    payload = dict(event)
+    name = payload.pop("type")
+    if "result" in payload and isinstance(payload["result"], dict):
+        payload = payload.pop("result")
+    return f"event: {name}\ndata: {json.dumps(payload)}\n\n"
 
 def create_app() -> FastAPI:
     settings = get_settings()
@@ -66,7 +85,7 @@ def create_app() -> FastAPI:
     # The hand-built checkpoint store that persists paused runs.
     app.state.store = hitl.CheckpointStore()
 
-    def _llm_call(user_prompt: str) -> str:
+    def _llm_call(user_prompt: str, tracer: trace_mod.Tracer | None = None) -> str:
         return llm.chat(
             app.state.client,
             model=settings.llm_model,
@@ -74,6 +93,17 @@ def create_app() -> FastAPI:
             user_prompt=user_prompt,
             temperature=settings.llm_temperature,
             max_tokens=settings.llm_max_tokens,
+            on_call=(
+                None
+                if tracer is None
+                else lambda rec: tracer.llm_span(
+                    messages=rec["messages"],
+                    completion=rec["completion"],
+                    duration_ms=rec["duration_ms"],
+                    input_tokens=rec["input_tokens"],
+                    output_tokens=rec["output_tokens"],
+                )
+            ),
         )
 
     @app.get("/health")
@@ -81,14 +111,112 @@ def create_app() -> FastAPI:
         return {"status": "ok", "approach": APPROACH, "usecase": USECASE}
 
     @app.post("/run", response_model=RunResponse)
-    def run(req: RunRequest) -> RunResponse:
-        paused = hitl.start_run(
-            req.request, llm_call=_llm_call, store=app.state.store
+    def run(req: RunRequest, trace: bool = False) -> RunResponse:
+        """Draft and park. ``?trace=1`` records the drafting call.
+
+        The trace covers phase one only — it ends where the run does, at the
+        gate. What happens after the human decides is a separate run and a
+        separate trace, which is the honest shape for a workflow that pauses.
+        """
+        settings = app.state.settings
+        recording = trace or settings.trace_sink != "none"
+        tracer = (
+            trace_mod.Tracer(
+                approach=APPROACH,
+                usecase=USECASE,
+                model=settings.llm_model,
+                temperature=settings.llm_temperature,
+                max_tokens=settings.llm_max_tokens,
+                include_prompts=settings.trace_include_prompts,
+            )
+            if recording
+            else None
         )
+
+        paused = hitl.start_run(
+            req.request,
+            llm_call=(lambda p: _llm_call(p, tracer)),
+            store=app.state.store,
+        )
+
+        doc = None
+        if tracer is not None:
+            doc = tracer.finish(status="ok", stop_reason="awaiting_approval")
+            if settings.trace_sink == "file":
+                trace_mod.persist(doc, settings.trace_dir)
+
         return RunResponse(
             run_id=paused.run_id,
             status=paused.status,
             proposed_action=paused.proposed_action,
+            trace=doc if trace else None,
+        )
+
+    @app.post("/run/stream")
+    def run_stream(req: RunRequest) -> StreamingResponse:
+        """Stream the draft, then **end the stream at the approval gate**.
+
+        The last frame is `awaiting_approval` carrying the run id. The
+        connection then closes, on purpose: an approver may take minutes or
+        days, and a held-open socket would turn every proxy timeout or restart
+        into a lost run. The checkpoint is the contract; the connection is not.
+        `POST /resume/stream` opens a fresh stream once the human decides.
+        See docs/streaming.md.
+        """
+        settings = app.state.settings
+
+        def frames():
+            def stream_call(user_prompt: str):
+                return llm.chat_stream(
+                    app.state.client,
+                    model=settings.llm_model,
+                    system_prompt=hitl.DRAFT_SYSTEM_PROMPT,
+                    user_prompt=user_prompt,
+                    temperature=settings.llm_temperature,
+                    max_tokens=settings.llm_max_tokens,
+                )
+
+            try:
+                for event in hitl.iter_start_run(
+                    req.request, llm_stream=stream_call, store=app.state.store
+                ):
+                    yield _sse(event)
+            except Exception as exc:  # noqa: BLE001 - a silent stream looks finished
+                yield _sse({"type": "error", "message": str(exc)})
+
+        return StreamingResponse(
+            frames(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    @app.post("/resume/stream")
+    def resume_stream(req: ResumeRequest) -> StreamingResponse:
+        """The second stream: the human has decided, so finish the run.
+
+        No `token` frames — approving executes the text that was already
+        drafted and reviewed. Regenerating after approval would mean the human
+        approved something other than what ships.
+        """
+
+        def frames():
+            try:
+                for event in hitl.iter_resume_run(
+                    req.run_id,
+                    approved=req.approved,
+                    feedback=req.feedback,
+                    store=app.state.store,
+                ):
+                    yield _sse(event)
+            except hitl.UnknownRunError:
+                yield _sse({"type": "error", "message": "unknown run_id"})
+            except Exception as exc:  # noqa: BLE001
+                yield _sse({"type": "error", "message": str(exc)})
+
+        return StreamingResponse(
+            frames(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
     @app.post("/resume", response_model=ResumeResponse)
