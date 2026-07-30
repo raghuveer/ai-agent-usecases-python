@@ -123,22 +123,40 @@ curl -X POST localhost:8000/run -H 'content-type: application/json' \
      -d '{"question":"How long is the return window?"}'
 ```
 
-That brings up Ollama, pulls a small local model (~1.4 GB, cached after the first
-run), and serves `raw-api/01-rag` against it. No account, no key, no gateway.
+That brings up Ollama, pulls a small local model, and serves `raw-api/01-rag`
+against it. No account, no key, no gateway.
+
+> **First run downloads ~1.5 GB and takes several minutes** — 1.4 GB for the
+> model, plus ~80 MB for the embedding model Chroma fetches on first start. Both
+> are cached afterwards, so later runs start in seconds. `/health` answers only
+> once the index is built; that is the wait.
+
 Pick a different example with `PROJECT`:
 
 ```bash
 PROJECT=langgraph/10-hitl-approval docker compose up --build
 ```
 
-Add `?trace=1` to any `/run` call to see exactly what the agent did — the
-messages sent, every tool call, tokens and latency. See
-[`docs/trace-format.md`](docs/trace-format.md).
+To see exactly what an agent did — the messages sent, every tool call, tokens and
+latency — add `?trace=1`. That is implemented on the **UC08** projects today
+(`raw-api`, `langchain`, `langgraph`, `claude-agent-sdk`), not yet on the rest;
+see [`docs/trace-format.md`](docs/trace-format.md) and the
+[UC08 comparison](docs/compare/08-autonomous-react.md).
 
 > Covers the three OpenAI-surface approaches. **`claude-agent-sdk` is not in the
 > Docker path**: it speaks the Anthropic Messages API and spawns the Claude Code
 > CLI, so it needs Node plus a real Anthropic-compatible endpoint. Run those
 > projects directly — each README explains the prerequisites.
+
+**Already running Ollama locally?** The compose file deliberately does *not*
+publish port 11434, so it will not collide with yours. Its Ollama is reachable
+only from the app container.
+
+**Rancher Desktop in containerd mode** has no Docker daemon — use `nerdctl
+compose up` instead. It works, with one caveat: nerdctl ignores
+`depends_on: condition`, so the app starts before the model finishes pulling and
+its first request may fail. Wait for the pull, then retry. Real `docker compose`
+gates this correctly.
 
 ## Quick start — local (any project)
 

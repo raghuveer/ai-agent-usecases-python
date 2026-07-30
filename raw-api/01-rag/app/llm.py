@@ -13,6 +13,8 @@ system prompt when the model id starts with ``qwen3``.
 """
 from __future__ import annotations
 
+import re
+
 from openai import OpenAI
 
 from .settings import Settings
@@ -42,6 +44,24 @@ def apply_no_think(model: str, system_prompt: str) -> str:
     return model_profile(model)["thinking_prefix"] + system_prompt
 
 
+_THINK_BLOCK = re.compile(r"<think>.*?</think>\s*", re.DOTALL | re.IGNORECASE)
+
+
+def strip_thinking(text: str) -> str:
+    """Remove ``<think>…</think>`` blocks from a reply.
+
+    ``/no_think`` tells qwen3 not to *reason* in the block, but the model still
+    emits an empty pair of tags — which then appear verbatim in the API response.
+    Caught by running the Docker quickstart, whose default model is a qwen3 tag;
+    the gateway's `qwen-local-instruct` alias (qwen2.5) has no thinking mode, so
+    this never showed up in the usual configuration.
+
+    Reasoning is stripped rather than returned: it is not the answer, and echoing
+    a model's chain-of-thought to callers is a bad default.
+    """
+    return _THINK_BLOCK.sub("", text).strip()
+
+
 def chat(
     client: OpenAI,
     *,
@@ -51,7 +71,10 @@ def chat(
     max_tokens: int = 384,
     temperature: float = 0.0,
 ) -> str:
-    """Single chat call. Returns the assistant message text (stripped)."""
+    """Single chat call. Returns the assistant message text (stripped).
+
+    Thinking blocks are removed from the reply — see :func:`strip_thinking`.
+    """
     system_prompt = apply_no_think(model, system_prompt)
     resp = client.chat.completions.create(
         model=model,
@@ -62,4 +85,4 @@ def chat(
         max_tokens=max_tokens,
         temperature=temperature,
     )
-    return (resp.choices[0].message.content or "").strip()
+    return strip_thinking(resp.choices[0].message.content or "")

@@ -156,6 +156,31 @@ hand-instrumented, langchain attaches a callback handler, langgraph must put
 callbacks in the *graph run config* (node identity only appears there), and the
 Agent SDK can only be read off the finished result.
 
+## Found by building the Docker quickstart (2026-07-31)
+
+Running the examples the way a newcomer would — `docker compose up`, straight at
+Ollama, no gateway — surfaced four things the usual configuration hides:
+
+13. **qwen3 leaks empty `<think></think>` tags into the answer.** `/no_think`
+    stops the model *reasoning* in the block but not emitting the tags, so the
+    first answer a newcomer sees reads
+    `"<think>\n\n</think>\n\nThe return window is 30 days."`. Invisible in normal
+    use because the gateway alias `qwen-local-instruct` is qwen2.5, which has no
+    thinking mode; the Docker default is a raw qwen3 tag, which does.
+    **Fixed in `raw-api/01-rag`** (the compose default) with `strip_thinking()`,
+    which also keeps chain-of-thought out of API responses on principle.
+    **Still open for the other 29 OpenAI-surface projects** — they only show it
+    when pointed at a qwen3 model, which now happens via `PROJECT=`.
+14. **Port 11434 collides** with an Ollama the user already runs — and that user
+    is exactly who tries this first. The compose file no longer publishes it;
+    the app reaches Ollama over the compose network.
+15. **Chroma re-downloads its ~80 MB ONNX embedding model on every container
+    recreate** unless `/root/.cache/chroma` is a volume. Now it is.
+16. **nerdctl ignores `depends_on: condition`** (Rancher Desktop in containerd
+    mode), so the app starts before the model finishes pulling and its first
+    request fails. Documented in the README rather than worked around — real
+    `docker compose` honours it.
+
 ## Status
 - **10/10 use cases × 4 approaches = 40 projects built.**
 - `claude-agent-sdk`: **131 offline unit tests green**. **All 14 integration tests verified live and passing — all 10 use cases.** Two live passes found 8 defects plus 1 test bug; every one is fixed, and the security-relevant ones (F10, F11, F14) are in `docs/security-review.md`.

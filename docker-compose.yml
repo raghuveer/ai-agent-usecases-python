@@ -14,9 +14,15 @@
 
 services:
   ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
+    # Pinned, not `latest`: this repo commits lockfiles so that what you install
+    # is what was tested, and a floating image tag would undo that for the one
+    # component a newcomer actually runs first.
+    image: ollama/ollama:0.6.8
+    # Deliberately no host port. `app` reaches Ollama over the compose network,
+    # so publishing 11434 is only a convenience — and it collides with an Ollama
+    # the user already runs locally, who is exactly the person most likely to try
+    # this. Add a mapping here (e.g. "11435:11434") if you want to poke at it
+    # from the host.
     volumes:
       - ollama-models:/root/.ollama
     healthcheck:
@@ -28,7 +34,10 @@ services:
       start_period: 10s
 
   model-pull:
-    image: ollama/ollama:latest
+    # Pinned, not `latest`: this repo commits lockfiles so that what you install
+    # is what was tested, and a floating image tag would undo that for the one
+    # component a newcomer actually runs first.
+    image: ollama/ollama:0.6.8
     depends_on:
       ollama:
         condition: service_healthy
@@ -51,6 +60,11 @@ services:
         condition: service_completed_successfully
     ports:
       - "8000:8000"
+    volumes:
+      # Chroma downloads an ~80 MB ONNX embedding model on first use. Without
+      # this it lives in the container filesystem and is re-fetched every time
+      # the container is recreated — a slow, silent startup on every rebuild.
+      - chroma-cache:/root/.cache/chroma
     environment:
       # Ollama's OpenAI-compatible surface. The examples are written against
       # that protocol, so nothing in the code changes — this is exactly the
@@ -70,3 +84,4 @@ services:
 
 volumes:
   ollama-models:
+  chroma-cache:

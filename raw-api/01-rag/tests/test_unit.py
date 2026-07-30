@@ -130,3 +130,17 @@ def test_health_and_run_offline():
     # from .env so it isn't necessarily qwen3.)
     sent = app.state.client.chat.completions.create.call_args.kwargs["messages"]
     assert "ONLY the provided context" in sent[0]["content"]
+
+
+def test_strip_thinking_removes_qwen3_think_blocks():
+    """`/no_think` still emits an empty <think></think> pair; it must not ship.
+
+    Found by running the Docker quickstart, whose default model is a qwen3 tag —
+    the answer came back as "<think>\n\n</think>\n\nThe return window is 30 days."
+    """
+    assert llm.strip_thinking("<think>\n\n</think>\n\n30 days.") == "30 days."
+    assert llm.strip_thinking("<think>reasoning here</think>Answer.") == "Answer."
+    # Nothing to strip: unchanged apart from trimming.
+    assert llm.strip_thinking("  30 days.  ") == "30 days."
+    # Chain-of-thought must never survive into a response.
+    assert "reasoning" not in llm.strip_thinking("<think>reasoning</think>ok")
