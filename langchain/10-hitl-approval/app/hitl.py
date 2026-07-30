@@ -27,13 +27,13 @@ from __future__ import annotations
 import threading
 import uuid
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Iterator, Optional
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
-from .llm import strip_thinking, system_prefix
+from .llm import strip_thinking_stream, system_prefix
 
 DRAFT_SYSTEM_PROMPT = (
     "You are an operations assistant. A human will review and approve your work "
@@ -52,7 +52,7 @@ def build_draft_chain(llm: BaseChatModel, settings=None):
             ("human", "Request: {request}\n\nDraft the action message:"),
         ]
     )
-    return prompt | llm | StrOutputParser() | strip_thinking
+    return prompt | llm | StrOutputParser() | strip_thinking_stream
 
 
 # --------------------------------------------------------------------------- #
@@ -88,6 +88,53 @@ class RunRegistry:
 
 class UnknownRunError(KeyError):
     """Raised when /resume is given a run_id that is not (or no longer) paused."""
+
+
+def iter_start_run(request: str, *, chain, registry: RunRegistry) -> Iterator[dict]:
+    """Draft with ``chain.stream()``, then park. See docs/streaming.md.
+
+    Ends at the approval gate: the last frame is ``awaiting_approval`` and the
+    caller's connection closes. Holding a socket open across a human decision is
+    the fragility a durable approval workflow exists to avoid.
+
+    Note the chain must end in ``strip_thinking_stream`` rather than
+    ``strip_thinking`` — a plain function in an LCEL pipe becomes a
+    ``RunnableLambda``, which buffers its whole input and silently turns this
+    stream back into one chunk (TRACKING finding 17).
+    """
+    pieces: list[str] = []
+    for piece in chain.stream({"request": request}):
+        text = piece if isinstance(piece, str) else str(piece)
+        if text:
+            pieces.append(text)
+            yield {"type": "token", "text": text}
+
+    proposed = "".join(pieces).strip() or "(the model returned an empty draft)"
+    run = PausedRun(run_id=uuid.uuid4().hex, request=request, proposed_action=proposed)
+    registry.save(run)
+    yield {
+        "type": "awaiting_approval",
+        "run_id": run.run_id,
+        "proposed_action": run.proposed_action,
+    }
+
+
+def iter_resume_run(
+    run_id: str,
+    *,
+    approved: bool,
+    registry: RunRegistry,
+    feedback: str | None = None,
+) -> Iterator[dict]:
+    """Resume as a second, short stream: the decision, then the outcome.
+
+    No ``token`` frames — approving executes the text the human already read.
+    """
+    yield {"type": "decision", "approved": approved}
+    outcome = resume_run(
+        run_id, approved=approved, registry=registry, feedback=feedback
+    )
+    yield {"type": "final", "result": outcome}
 
 
 def start_run(request: str, *, chain, registry: RunRegistry) -> PausedRun:

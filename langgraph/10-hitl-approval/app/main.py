@@ -16,16 +16,21 @@ state, a single compiled graph serves every run_id.
 """
 from __future__ import annotations
 
+import json
+from typing import Any
+
 import uuid
 from contextlib import asynccontextmanager
 
+from fastapi.responses import StreamingResponse
 from fastapi import FastAPI, HTTPException
 from langchain_core.language_models import BaseChatModel
 from langgraph.types import Command
 from pydantic import BaseModel, Field
 
 from .hitl import build_approval_graph
-from .llm import build_llm
+from .llm import ThinkFilter, build_llm
+from . import trace as trace_mod
 from .settings import get_settings
 
 APPROACH = "langgraph"
@@ -40,6 +45,8 @@ class RunResponse(BaseModel):
     run_id: str
     status: str
     proposed_action: str
+    # Present only with `?trace=1`. Schema: docs/trace-format.md
+    trace: dict[str, Any] | None = None
 
 
 class ResumeRequest(BaseModel):
@@ -73,6 +80,18 @@ def _interrupt_payload(graph, config: dict) -> dict:
                 return itr.value
     return {}
 
+
+def _sse(event: dict) -> str:
+    """Format one HITL event as a server-sent event frame.
+
+    The `awaiting_approval` frame is the last one a run emits before the human
+    decides — see docs/streaming.md for why the stream ends there.
+    """
+    payload = dict(event)
+    name = payload.pop("type")
+    if "result" in payload and isinstance(payload["result"], dict):
+        payload = payload.pop("result")
+    return f"event: {name}\ndata: {json.dumps(payload)}\n\n"
 
 def create_app(llm: BaseChatModel | None = None) -> FastAPI:
     settings = get_settings()
@@ -119,6 +138,111 @@ def create_app(llm: BaseChatModel | None = None) -> FastAPI:
         )
         return RunResponse(
             run_id=run_id, status="awaiting_approval", proposed_action=proposed
+        )
+
+    @app.post("/run/stream")
+    def run_stream(req: RunRequest) -> StreamingResponse:
+        """Stream until the graph interrupts, then **end at the gate**.
+
+        The difference from the other three approaches is what the ending
+        *means*. Here the stream stops because ``interrupt()`` suspended the
+        graph, and the **checkpointer already persisted the state** — closing
+        the connection loses nothing, and the run could be resumed by a
+        different process entirely. In `raw-api/10` and `langchain/10` the
+        equivalent durability is hand-built bookkeeping the developer owns.
+
+        See docs/streaming.md.
+        """
+        run_id = uuid.uuid4().hex
+        config = _config(run_id)
+
+        def frames():
+            think = ThinkFilter()
+            try:
+                for mode, chunk in app.state.graph.stream(
+                    {
+                        "request": req.request,
+                        "proposed_action": "",
+                        "approved": None,
+                        "feedback": None,
+                        "status": "",
+                        "result": None,
+                    },
+                    config=config,
+                    stream_mode=["messages", "updates"],
+                ):
+                    if mode == "messages":
+                        message, _meta = chunk
+                        raw = getattr(message, "content", "") or ""
+                        visible = think.feed(
+                            raw if isinstance(raw, str) else str(raw)
+                        )
+                        if visible:
+                            yield _sse({"type": "token", "text": visible})
+                        continue
+                    for node in (chunk or {}):
+                        yield _sse({"type": "node", "name": node})
+
+                tail = think.flush()
+                if tail:
+                    yield _sse({"type": "token", "text": tail})
+
+                proposed = _interrupt_payload(app.state.graph, config).get(
+                    "proposed_action", ""
+                )
+                yield _sse({
+                    "type": "awaiting_approval",
+                    "run_id": run_id,
+                    "proposed_action": proposed,
+                })
+            except Exception as exc:  # noqa: BLE001 - a silent stream looks finished
+                yield _sse({"type": "error", "message": str(exc)})
+
+        return StreamingResponse(
+            frames(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    @app.post("/resume/stream")
+    def resume_stream(req: ResumeRequest) -> StreamingResponse:
+        """Re-enter the SAME thread and stream the rest of the graph."""
+        config = _config(req.run_id)
+
+        def frames():
+            snapshot = app.state.graph.get_state(config)
+            if not snapshot.next:
+                yield _sse({"type": "error", "message": "unknown run_id"})
+                return
+
+            yield _sse({"type": "decision", "approved": req.approved})
+            try:
+                state: dict = {}
+                for chunk in app.state.graph.stream(
+                    Command(
+                        resume={"approved": req.approved, "feedback": req.feedback}
+                    ),
+                    config=config,
+                    stream_mode="updates",
+                ):
+                    for node, delta in (chunk or {}).items():
+                        yield _sse({"type": "node", "name": node})
+                        state.update(delta or {})
+                yield _sse({
+                    "type": "final",
+                    "result": {
+                        "status": state.get("status", ""),
+                        "result": state.get("result"),
+                        "feedback": state.get("feedback"),
+                    },
+                })
+            except Exception as exc:  # noqa: BLE001
+                yield _sse({"type": "error", "message": str(exc)})
+
+        return StreamingResponse(
+            frames(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
     @app.post("/resume", response_model=ResumeResponse)

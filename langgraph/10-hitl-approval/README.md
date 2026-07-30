@@ -51,6 +51,18 @@ ephemeral); swap in `SqliteSaver`/`PostgresSaver` for durability across restarts
   not approved → `{"status":"rejected","result": null}`;
   unknown `run_id` → **404**.
 
+## Streaming through the approval gate
+
+`POST /run/stream` streams the draft and **ends at the gate** — its last frame is
+`awaiting_approval`. `POST /resume/stream` opens a second stream once the human
+decides. Holding one connection open across a human decision would make every
+proxy timeout or restart a lost run; the checkpoint is the contract, not the
+connection. `/resume/stream` emits no `token` frames on purpose: approving
+executes the text the human already read.
+
+Full contract and the four-way comparison of *what survives the gate*:
+[`docs/streaming.md`](../../docs/streaming.md).
+
 ## Env vars (`.env.example`)
 
 | Var | Default | Meaning |

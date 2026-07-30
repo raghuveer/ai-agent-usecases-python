@@ -73,6 +73,45 @@ asymmetry the trace found (no per-call messages, no token counts), showing up
 here as latency instead of missing fields: **writing no loop costs you the view
 inside it.**
 
+## UC10: the stream ends at the approval gate
+
+A human-in-the-loop run does not finish — it *pauses*. So `POST /run/stream`
+streams the draft and then ends, with `awaiting_approval` as its last frame:
+
+```
+event: token             ×31
+event: awaiting_approval  {"run_id": "…", "proposed_action": "…"}
+                          ← stream closes here
+```
+
+`POST /resume/stream` opens a **second** stream once the human decides
+(`decision` → … → `final`). Holding one connection open across the decision
+would make every proxy timeout, restart or dropped socket a lost run — the exact
+fragility a durable approval workflow exists to avoid. **The checkpoint is the
+contract; the connection is not.** Note also that `/resume/stream` emits no
+`token` frames: approving executes the text the human already read, and
+regenerating after approval would mean they approved something other than what
+ships.
+
+What differs between the approaches is **what actually survives the gate** — and
+this is the sharpest comparison in the repo:
+
+| | What is parked | Survives a restart? |
+|---|---|---|
+| raw-api | a hand-built `CheckpointStore` entry | only if you write persistence yourself |
+| langchain | an app-level `RunRegistry` entry | same — the framework has no pause |
+| **langgraph** | **a checkpointer record** (`interrupt()`) | **yes — another process could resume it** |
+| claude-agent-sdk | a **live coroutine** + an in-memory queue | **no** — in-process only |
+
+The `node` frames make langgraph's version self-describing: a live run emits
+`draft → __interrupt__` before the gate and `review → execute` after resume. The
+framework names its own suspension.
+
+The Agent SDK's gate is a `can_use_tool` callback that suspends a coroutine
+mid-run, so the agent cannot be iterated by the same coroutine serving the HTTP
+response — it runs as a background task publishing to a queue. That works, and it
+is honestly in-process only.
+
 ## Three things streaming forces you to confront
 
 **1. Thinking tags arrive split across chunks.** qwen3 emits `<think>…</think>`

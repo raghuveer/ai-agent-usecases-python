@@ -92,6 +92,11 @@ class PendingRun:
     feedback: str | None = None
     task: asyncio.Task[AgentResult] | None = None
     expired: bool = False
+    # Frames the agent produced, for `/run/stream` and `/resume/stream` to drain.
+    # This queue is why streaming here is *in-process only*: the parked run is a
+    # live coroutine plus an in-memory queue, not a checkpoint. langgraph/10
+    # survives a restart; this does not. See docs/streaming.md.
+    events: asyncio.Queue | None = None
 
     @property
     def awaiting_approval(self) -> bool:
@@ -227,6 +232,104 @@ async def start_run(
         # Finished without requesting approval (or raised — surface that).
         return pending.task.result()
     return None
+
+
+_SENTINEL = object()
+
+
+async def iter_start_run(
+    pending: PendingRun,
+    prompt: str,
+    options: ClaudeAgentOptions,
+    runner=None,
+):
+    """Run the agent, yielding frames until it parks for approval.
+
+    The shape is forced by the approach. The gate is a ``can_use_tool``
+    callback that suspends a **live coroutine** mid-run, so the agent cannot be
+    iterated by the same coroutine that serves the HTTP response — ending the
+    response would abandon the parked run. Instead the agent runs as a
+    background task publishing frames to ``pending.events``, and this drains
+    them until the approval request fires.
+
+    That is also the honest limitation: what survives the gate here is a
+    coroutine and an in-memory queue, not a checkpoint. `langgraph/10` resumes
+    from a checkpointer and would survive a restart or a different process;
+    this would not.
+    """
+    from .agent import iter_events  # local import keeps the seam swappable
+
+    pending.events = asyncio.Queue()
+
+    async def pump() -> AgentResult:
+        result: AgentResult | None = None
+        try:
+            async for event in iter_events(prompt, options):
+                if event["type"] == "final":
+                    result = event["result"]
+                await pending.events.put(event)
+        finally:
+            await pending.events.put(_SENTINEL)
+        return result or AgentResult()
+
+    pending.task = asyncio.create_task(pump() if runner is None else runner(prompt, options))
+    waiter = asyncio.create_task(pending.requested.wait())
+
+    # Drain frames until the agent parks (or finishes without asking).
+    while True:
+        getter = asyncio.create_task(pending.events.get())
+        done, _ = await asyncio.wait(
+            {getter, waiter}, return_when=asyncio.FIRST_COMPLETED
+        )
+        if getter in done:
+            item = getter.result()
+            if item is _SENTINEL:
+                waiter.cancel()
+                return
+            yield item
+            continue
+
+        getter.cancel()
+        break
+
+    waiter.cancel()
+    yield {
+        "type": "awaiting_approval",
+        "run_id": pending.run_id,
+        "proposed_action": pending.proposed_action(),
+    }
+
+
+async def iter_resume_run(
+    pending: PendingRun, approved: bool, feedback: str | None = None
+):
+    """Deliver the decision, then drain whatever the agent does next."""
+    yield {"type": "decision", "approved": approved}
+
+    pending.feedback = feedback
+    if not pending.decision.done():
+        pending.decision.set_result(approved)
+
+    if pending.events is None:
+        result = await resolve_run(pending, approved, feedback)
+        yield {"type": "final", "result": result}
+        return
+
+    result: AgentResult | None = None
+    while True:
+        item = await pending.events.get()
+        if item is _SENTINEL:
+            break
+        if item["type"] == "final":
+            result = item["result"]
+            continue
+        yield item
+
+    if result is None:
+        # A denial with interrupt=True stops the run abruptly; that is the
+        # expected terminal state here, not a failure.
+        result = AgentResult(text="", stop_reason="rejected", is_error=not approved)
+    yield {"type": "final", "result": result, "approved": approved}
 
 
 async def resolve_run(
