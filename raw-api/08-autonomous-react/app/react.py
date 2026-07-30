@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, Iterator
 
 from .tools import TOOLS, UnsafeExpression
 
@@ -138,7 +138,43 @@ def run_react(
     """Run the ReAct loop until Final Answer or max_steps.
 
     ``llm_call(messages)`` returns the assistant reply text for a message list.
+
+    Implemented by draining :func:`iter_react`, so the blocking and streaming
+    paths cannot drift apart — there is one loop, exposed two ways.
     """
+    result: ReactResult | None = None
+    for event in iter_react(
+        task, llm_call=llm_call, tools=tools, max_steps=max_steps
+    ):
+        if event["type"] == "final":
+            result = event["result"]
+    assert result is not None, "iter_react always ends with a final event"
+    return result
+
+
+def iter_react(
+    task: str,
+    *,
+    llm_call: LLMCall | None = None,
+    llm_stream: Callable[[list[dict]], Iterator[str]] | None = None,
+    tools: ToolRegistry | None = None,
+    max_steps: int = 6,
+) -> Iterator[dict]:
+    """The ReAct loop as a stream of events.
+
+    Yields, in order as they happen:
+
+    * ``{"type": "token", "text": …}`` — only when ``llm_stream`` is given
+    * ``{"type": "thought", "text": …}`` — the model's reasoning for this turn
+    * ``{"type": "step", "step": Step}`` — a tool ran, with its observation
+    * ``{"type": "final", "result": ReactResult}`` — always last
+
+    Exactly one of ``llm_call`` / ``llm_stream`` is used; the streaming variant
+    assembles the same reply text from its chunks, so parsing is identical
+    either way.
+    """
+    if llm_call is None and llm_stream is None:
+        raise ValueError("pass llm_call or llm_stream")
     tools = tools if tools is not None else TOOLS
     messages: list[dict] = [
         {"role": "system", "content": build_system_prompt(tools)},
@@ -148,12 +184,29 @@ def run_react(
     nudged = False
 
     for _ in range(max_steps):
-        reply = llm_call(messages)
+        if llm_stream is not None:
+            pieces: list[str] = []
+            for piece in llm_stream(messages):
+                pieces.append(piece)
+                yield {"type": "token", "text": piece}
+            reply = "".join(pieces).strip()
+        else:
+            reply = llm_call(messages)
         messages.append({"role": "assistant", "content": reply})
+
+        thought = parse_thought(reply)
+        if thought:
+            yield {"type": "thought", "text": thought}
 
         final = parse_final_answer(reply)
         if final is not None:
-            return ReactResult(answer=final, steps=steps, stopped_reason="final_answer")
+            yield {
+                "type": "final",
+                "result": ReactResult(
+                    answer=final, steps=steps, stopped_reason="final_answer"
+                ),
+            }
+            return
 
         parsed = parse_action(reply)
         if parsed is None:
@@ -168,28 +221,31 @@ def run_react(
                     ),
                 })
                 continue
-            return ReactResult(
-                answer=reply.strip(),
-                steps=steps,
-                stopped_reason="max_steps",
-            )
+            yield {
+                "type": "final",
+                "result": ReactResult(
+                    answer=reply.strip(), steps=steps, stopped_reason="max_steps"
+                ),
+            }
+            return
 
         action, action_input = parsed
         observation = run_tool(tools, action, action_input)
-        steps.append(
-            Step(
-                thought=parse_thought(reply),
-                action=action,
-                action_input=action_input,
-                observation=observation,
-            )
+        step = Step(
+            thought=thought,
+            action=action,
+            action_input=action_input,
+            observation=observation,
         )
+        steps.append(step)
+        yield {"type": "step", "step": step}
         messages.append({"role": "user", "content": f"Observation: {observation}"})
 
     # Ran out of steps without a Final Answer.
     last_obs = steps[-1].observation if steps else ""
-    return ReactResult(
-        answer=last_obs,
-        steps=steps,
-        stopped_reason="max_steps",
-    )
+    yield {
+        "type": "final",
+        "result": ReactResult(
+            answer=last_obs, steps=steps, stopped_reason="max_steps"
+        ),
+    }

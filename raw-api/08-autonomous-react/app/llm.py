@@ -43,6 +43,112 @@ def strip_thinking(text: str) -> str:
     return _THINK_BLOCK.sub("", text or "").strip()
 
 
+class ThinkFilter:
+    """Drops ``<think>…</think>`` spans from a *token stream*, incrementally.
+
+    Streaming makes the thinking-tag problem harder than it looks. In a complete
+    reply you can regex the block out; in a stream the tags arrive split across
+    chunks (``"<th"`` + ``"ink>"``), and by the time you recognise one you may
+    already have forwarded its contents to the client.
+
+    So text is held back whenever it could still turn out to be a tag: anything
+    after a ``<`` is buffered until it either completes a tag or proves not to
+    be one. That costs a few characters of latency and is the only way to
+    guarantee reasoning never reaches the caller.
+    """
+
+    _OPEN, _CLOSE = "<think>", "</think>"
+
+    def __init__(self) -> None:
+        self._buffer = ""
+        self._inside = False
+
+    def feed(self, chunk: str) -> str:
+        """Return the part of ``chunk`` that is safe to emit now."""
+        self._buffer += chunk
+        out: list[str] = []
+
+        while self._buffer:
+            if self._inside:
+                end = self._buffer.find(self._CLOSE)
+                if end == -1:
+                    # Keep only enough to recognise a close tag split across chunks.
+                    self._buffer = self._buffer[-(len(self._CLOSE) - 1):]
+                    break
+                self._buffer = self._buffer[end + len(self._CLOSE):]
+                self._inside = False
+                continue
+
+            start = self._buffer.find(self._OPEN)
+            if start != -1:
+                out.append(self._buffer[:start])
+                self._buffer = self._buffer[start + len(self._OPEN):]
+                self._inside = True
+                continue
+
+            # No complete open tag. Emit everything that cannot be the start of
+            # one; hold back a possible partial tag at the tail.
+            cut = self._buffer.rfind("<")
+            if cut == -1:
+                out.append(self._buffer)
+                self._buffer = ""
+            else:
+                out.append(self._buffer[:cut])
+                self._buffer = self._buffer[cut:]
+            break
+
+        return "".join(out)
+
+    def flush(self) -> str:
+        """Emit whatever is held back, at end of stream."""
+        tail = "" if self._inside else self._buffer
+        self._buffer = ""
+        return tail
+
+
+def chat_stream(
+    client: OpenAI,
+    *,
+    model: str,
+    messages: list[dict],
+    max_tokens: int = 384,
+    temperature: float = 0.0,
+    stop: list[str] | None = None,
+):
+    """Yield assistant text incrementally. Thinking spans never reach the caller.
+
+    The raw-api version of streaming is the OpenAI SDK's own ``stream=True``:
+    a plain iterator of deltas, which is exactly what this approach exists to
+    show. Everything above it — filtering, stop handling, event framing — is
+    yours to write.
+    """
+    msgs = [dict(m) for m in messages]
+    if msgs and msgs[0].get("role") == "system":
+        msgs[0]["content"] = apply_no_think(model, msgs[0]["content"])
+    kwargs: dict = dict(
+        model=model,
+        messages=msgs,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        stream=True,
+    )
+    if stop and model_profile(model)["supports_stop"]:
+        kwargs["stop"] = stop
+
+    think = ThinkFilter()
+    for chunk in client.chat.completions.create(**kwargs):
+        if not chunk.choices:
+            continue
+        piece = chunk.choices[0].delta.content or ""
+        if piece:
+            visible = think.feed(piece)
+            if visible:
+                yield visible
+    tail = think.flush()
+    if tail:
+        yield tail
+
+
 def build_client(settings: Settings) -> OpenAI:
     """Construct an OpenAI SDK client pointed at the gateway."""
     return OpenAI(base_url=settings.llm_base_url, api_key=settings.llm_gateway_key)

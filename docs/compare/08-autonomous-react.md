@@ -8,7 +8,7 @@ Every approach here solves an identical task with identical tools. What differs 
 
 | Approach | `app/` lines | Core symbol | The trade |
 |---|---:|---|---|
-| [`raw-api`](../../raw-api/08-autonomous-react) | 651 | `app/react.py::run_react` | You write the loop, the parser, and the stop condition. |
+| [`raw-api`](../../raw-api/08-autonomous-react) | 840 | `app/react.py::run_react` | You write the loop, the parser, and the stop condition. |
 | [`langchain`](../../langchain/08-autonomous-react) | 639 | `app/react.py::run_react` | The framework supplies tools and message types; the loop is still yours. |
 | [`langgraph`](../../langgraph/08-autonomous-react) | 698 | `app/react.py::build_react_graph` | The loop becomes a graph: nodes, a conditional edge, and a cycle. |
 | [`claude-agent-sdk`](../../claude-agent-sdk/08-autonomous-react) | 538 | `app/react_agent.py::run_react` | There is no loop in the repo. The SDK owns it. |
@@ -32,61 +32,18 @@ def run_react(
     """Run the ReAct loop until Final Answer or max_steps.
 
     ``llm_call(messages)`` returns the assistant reply text for a message list.
+
+    Implemented by draining :func:`iter_react`, so the blocking and streaming
+    paths cannot drift apart — there is one loop, exposed two ways.
     """
-    tools = tools if tools is not None else TOOLS
-    messages: list[dict] = [
-        {"role": "system", "content": build_system_prompt(tools)},
-        {"role": "user", "content": f"Task: {task}\n\nBegin."},
-    ]
-    steps: list[Step] = []
-    nudged = False
-
-    for _ in range(max_steps):
-        reply = llm_call(messages)
-        messages.append({"role": "assistant", "content": reply})
-
-        final = parse_final_answer(reply)
-        if final is not None:
-            return ReactResult(answer=final, steps=steps, stopped_reason="final_answer")
-
-        parsed = parse_action(reply)
-        if parsed is None:
-            # No Action and no Final Answer. Nudge once, then give up.
-            if not nudged:
-                nudged = True
-                messages.append({
-                    "role": "user",
-                    "content": (
-                        "Please respond using the required format: either an "
-                        "Action with Action Input, or a Final Answer."
-                    ),
-                })
-                continue
-            return ReactResult(
-                answer=reply.strip(),
-                steps=steps,
-                stopped_reason="max_steps",
-            )
-
-        action, action_input = parsed
-        observation = run_tool(tools, action, action_input)
-        steps.append(
-            Step(
-                thought=parse_thought(reply),
-                action=action,
-                action_input=action_input,
-                observation=observation,
-            )
-        )
-        messages.append({"role": "user", "content": f"Observation: {observation}"})
-
-    # Ran out of steps without a Final Answer.
-    last_obs = steps[-1].observation if steps else ""
-    return ReactResult(
-        answer=last_obs,
-        steps=steps,
-        stopped_reason="max_steps",
-    )
+    result: ReactResult | None = None
+    for event in iter_react(
+        task, llm_call=llm_call, tools=tools, max_steps=max_steps
+    ):
+        if event["type"] == "final":
+            result = event["result"]
+    assert result is not None, "iter_react always ends with a final event"
+    return result
 ```
 
 ### langchain — `app/react.py`

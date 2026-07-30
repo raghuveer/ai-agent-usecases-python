@@ -356,3 +356,112 @@ def test_strip_thinking_removes_qwen3_think_blocks():
     assert strip_thinking("  30 days.  ") == "30 days."
     # Chain-of-thought must never survive into a response.
     assert "reasoning" not in strip_thinking("<think>reasoning</think>ok")
+
+
+# --------------------------------------------------------------------------- #
+# Streaming (SSE). See docs/streaming.md
+# --------------------------------------------------------------------------- #
+def test_think_filter_drops_reasoning_split_across_chunks():
+    """The hard part of streaming: tags arrive split, and once you have
+    forwarded reasoning to the client you cannot take it back."""
+    f = llm.ThinkFilter()
+    out = "".join(f.feed(c) for c in ["<th", "ink>secret", " stuff</thi", "nk>Answer."])
+    out += f.flush()
+    assert out == "Answer."
+    assert "secret" not in out
+
+
+def test_think_filter_passes_plain_text_through():
+    f = llm.ThinkFilter()
+    assert "".join(f.feed(c) for c in ["Hello ", "world"]) + f.flush() == "Hello world"
+
+
+def test_think_filter_holds_back_a_possible_partial_tag():
+    """A trailing '<' might begin a think tag, so it must not be emitted yet."""
+    f = llm.ThinkFilter()
+    assert f.feed("done <") == "done "
+    assert f.flush() == "<"
+
+
+def test_iter_react_yields_tokens_steps_then_final():
+    """One loop, two APIs: the streaming path emits the same decisions."""
+    scripted = [
+        ["Thought: look", " it up", "\nAction: search\nArguments: return window"],
+        ["Thought: done", "\nFinal Answer: 30 days"],
+    ]
+    calls = {"n": 0}
+
+    def fake_stream(_messages):
+        chunks = scripted[min(calls["n"], len(scripted) - 1)]
+        calls["n"] += 1
+        yield from chunks
+
+    events = list(react.iter_react("x", llm_stream=fake_stream, max_steps=4))
+    kinds = [e["type"] for e in events]
+
+    assert kinds.count("token") == 5
+    assert "step" in kinds and kinds[-1] == "final"
+    # Tool ran between the two model turns.
+    assert kinds.index("step") < kinds.index("final")
+
+    step = next(e["step"] for e in events if e["type"] == "step")
+    assert step.action == "search"
+    assert "30 days" in step.observation
+
+    result = events[-1]["result"]
+    assert result.answer == "30 days"
+    assert result.stopped_reason == "final_answer"
+
+
+def test_run_react_and_iter_react_agree():
+    """run_react drains iter_react, so they must not diverge."""
+    script = ScriptedLLM([
+        "Thought: look\nAction: search\nArguments: return window",
+        "Thought: done\nFinal Answer: 30 days",
+    ])
+    blocking = react.run_react("x", llm_call=script, max_steps=4)
+
+    script2 = ScriptedLLM([
+        "Thought: look\nAction: search\nArguments: return window",
+        "Thought: done\nFinal Answer: 30 days",
+    ])
+    streamed = [
+        e for e in react.iter_react("x", llm_call=script2, max_steps=4)
+    ][-1]["result"]
+
+    assert blocking.answer == streamed.answer
+    assert blocking.stopped_reason == streamed.stopped_reason
+    assert [s.action for s in blocking.steps] == [s.action for s in streamed.steps]
+
+
+def test_stream_endpoint_emits_sse_frames():
+    app = create_app()
+    app.state.settings = Settings()
+
+    def fake_create(**kwargs):
+        assert kwargs.get("stream") is True, "the endpoint must ask for a stream"
+        for piece in ["Thought: done", "\nFinal Answer: 30 days"]:
+            delta = MagicMock()
+            delta.content = piece
+            choice = MagicMock()
+            choice.delta = delta
+            yield MagicMock(choices=[choice])
+
+    client = MagicMock()
+    client.chat.completions.create.side_effect = fake_create
+    app.state.client = client
+
+    with TestClient(app).stream(
+        "POST", "/run/stream", json={"task": "return window?"}
+    ) as resp:
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/event-stream")
+        body = "".join(resp.iter_text())
+
+    assert "event: token" in body
+    assert "event: final" in body
+    # Frames are terminated by a blank line, or the client buffers forever.
+    assert body.endswith("\n\n")
+    final = json.loads(body.rsplit("data: ", 1)[1].strip())
+    assert final["answer"] == "30 days"
+    assert final["stopped_reason"] == "final_answer"

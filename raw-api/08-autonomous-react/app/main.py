@@ -9,10 +9,12 @@ run fully offline. ``POST /run`` drives the hand-written ReAct loop.
 """
 from __future__ import annotations
 
+import json
 import time
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from . import llm, react, trace as trace_mod
@@ -41,6 +43,26 @@ class RunResponse(BaseModel):
     # Present only when the caller asks for it with `?trace=1`.
     # Schema: docs/trace-format.md
     trace: dict[str, Any] | None = None
+
+
+def _sse(event: dict) -> str:
+    """Format one loop event as a server-sent event frame.
+
+    SSE is `event: <name>\\ndata: <json>\\n\\n`. The blank line terminates the
+    frame — omit it and the client buffers forever waiting for more.
+    """
+    payload = dict(event)
+    name = payload.pop("type")
+    if "step" in payload:  # dataclass -> JSON
+        payload["step"] = vars(payload["step"])
+    if "result" in payload:
+        result = payload.pop("result")
+        payload = {
+            "answer": result.answer,
+            "stopped_reason": result.stopped_reason,
+            "steps": [vars(s) for s in result.steps],
+        }
+    return f"event: {name}\ndata: {json.dumps(payload)}\n\n"
 
 
 def _traced_tools(tools: react.ToolRegistry, tracer: trace_mod.Tracer):
@@ -104,6 +126,48 @@ def create_app() -> FastAPI:
     @app.get("/health")
     def health() -> dict:
         return {"status": "ok", "approach": APPROACH, "usecase": USECASE}
+
+    @app.post("/run/stream")
+    def run_stream(req: RunRequest) -> StreamingResponse:
+        """Server-sent events: watch the loop reason, act and observe live.
+
+        The raw-api version of streaming is exactly what it looks like — the
+        OpenAI SDK yields deltas, the loop yields events, and this function
+        formats SSE frames by hand. No framework is doing any of it, which is
+        the point of this approach.
+
+        Event names follow docs/streaming.md so all four approaches can be
+        compared frame for frame.
+        """
+        settings = app.state.settings
+        max_steps = req.max_steps if req.max_steps is not None else settings.max_steps
+
+        def frames():
+            def stream_call(messages: list[dict]):
+                return llm.chat_stream(
+                    app.state.client,
+                    model=settings.llm_model,
+                    messages=messages,
+                    temperature=settings.llm_temperature,
+                    max_tokens=settings.llm_max_tokens,
+                    stop=["Observation:"],
+                )
+
+            try:
+                for event in react.iter_react(
+                    req.task, llm_stream=stream_call, max_steps=max_steps
+                ):
+                    yield _sse(event)
+            except Exception as exc:  # noqa: BLE001 - the client must be told
+                # A stream that dies silently looks identical to one that
+                # finished, so failures are framed as events too.
+                yield _sse({"type": "error", "message": str(exc)})
+
+        return StreamingResponse(
+            frames(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     @app.post("/run", response_model=RunResponse)
     def run(req: RunRequest, trace: bool = False) -> RunResponse:
