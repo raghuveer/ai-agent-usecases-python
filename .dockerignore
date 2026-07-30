@@ -1,0 +1,23 @@
+# The build context is the whole repo (the Dockerfile selects one project via a
+# build arg), so excluding these is not an optimisation — a Windows-built .venv
+# copied into a Linux image would shadow the installed packages and break the
+# container in a confusing way.
+**/.venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+
+# Local state, never belongs in an image
+**/.env
+**/.chroma/
+**/traces/
+**/*.db
+**/*.sqlite3
+
+.git/
+.github/
+docs/
+*.md
+!*/*/README.md

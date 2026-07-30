@@ -42,11 +42,14 @@ exceptions, so the agent can correct itself instead of the run dying.
 - `GET /health` → `{"status":"ok","approach":"claude-agent-sdk","usecase":"08-autonomous-react"}`
 - `GET /metrics` → the fixed warehouse the agent must query through tools
 - `POST /run` body `{"question": str}` →
-  `{"answer": str, "trace": [{"tool": str, "input": {...}}], "num_turns": int,
-    "cost_usd": float, "hit_turn_limit": bool, "run_trace": object|null}`
-- `POST /run?trace=1` — same, with `run_trace` populated. See below.
-  (It is `run_trace`, not `trace`, because this project already shipped `trace`
-  as its tool-call list; the cross-approach comparison uses the document.)
+  `{"answer": str, "steps": [{"tool": str, "input": {...}}], "num_turns": int,
+    "cost_usd": float, "hit_turn_limit": bool, "trace": object|null}`
+- `POST /run?trace=1` — same, with `trace` populated. See below.
+
+> **Renamed in v0.5.0.** The tool-call list moved from `trace` to `steps`, freeing
+> `trace` for the shared trace document — so all four approaches now name the same
+> ideas the same way. Comparing them is the point of the repo; their responses
+> should not disagree on vocabulary.
 
 ## See what it actually did — and what you *cannot* see (`?trace=1`)
 
@@ -91,7 +94,7 @@ cost, because an OpenAI-compatible endpoint does not price the call.
 > the harness prompt being re-paid every turn with no caching through the
 > gateway (see the root README's cost note). Budget agent-SDK runs accordingly.
 
-`trace` is the observed sequence of tool calls — the ReAct trajectory, read back
+`steps` is the observed sequence of tool calls — the ReAct trajectory, read back
 from what the agent actually did. `hit_turn_limit` is reported rather than
 hidden: a truncated run should be visible, not silently returned as an answer.
 

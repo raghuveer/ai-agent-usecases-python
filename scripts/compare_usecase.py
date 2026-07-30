@@ -31,21 +31,127 @@ DATA_DIR = OUT_DIR / "data"
 # rendered snippets answer the same question — "what drives the loop?" — rather
 # than showing whatever happens to be at the top of a file.
 MANIFEST: dict[str, dict[str, tuple[str, str]]] = {
+    "01-rag": {
+        "raw-api": ("app/rag.py", "answer"),
+        "langchain": ("app/rag.py", "build_chain"),
+        "langgraph": ("app/rag.py", "build_rag_graph"),
+        "claude-agent-sdk": ("app/rag.py", "answer"),
+    },
+    "02-code-generation": {
+        "raw-api": ("app/codegen.py", "generate"),
+        "langchain": ("app/codegen.py", "generate"),
+        "langgraph": ("app/codegen.py", "build_codegen_graph"),
+        "claude-agent-sdk": ("app/codegen.py", "generate"),
+    },
+    "03-data-extraction": {
+        "raw-api": ("app/extract.py", "extract_invoice"),
+        "langchain": ("app/extract.py", "extract_invoice"),
+        "langgraph": ("app/extract.py", "build_extract_graph"),
+        "claude-agent-sdk": ("app/extract.py", "extract"),
+    },
+    "04-research-agent": {
+        "raw-api": ("app/agent.py", "run_agent"),
+        "langchain": ("app/agent.py", "run_agent"),
+        "langgraph": ("app/agent.py", "build_agent_graph"),
+        "claude-agent-sdk": ("app/research.py", "research"),
+    },
+    "05-support-triage": {
+        "raw-api": ("app/triage.py", "triage"),
+        "langchain": ("app/triage.py", "triage"),
+        "langgraph": ("app/triage.py", "build_triage_graph"),
+        "claude-agent-sdk": ("app/triage.py", "triage"),
+    },
+    "06-sql-agent": {
+        "raw-api": ("app/sqlagent.py", "answer"),
+        "langchain": ("app/sqlagent.py", "answer_question"),
+        "langgraph": ("app/sqlagent.py", "build_sql_graph"),
+        "claude-agent-sdk": ("app/sql_agent.py", "ask"),
+    },
+    "07-multi-agent": {
+        "raw-api": ("app/agents.py", "orchestrate"),
+        "langchain": ("app/agents.py", "orchestrate"),
+        "langgraph": ("app/graph.py", "build_multi_agent_graph"),
+        "claude-agent-sdk": ("app/team.py", "run_team"),
+    },
     "08-autonomous-react": {
         "raw-api": ("app/react.py", "run_react"),
         "langchain": ("app/react.py", "run_react"),
         "langgraph": ("app/react.py", "build_react_graph"),
         "claude-agent-sdk": ("app/react_agent.py", "run_react"),
     },
+    "09-recommendations": {
+        "raw-api": ("app/recommend.py", "recommend"),
+        "langchain": ("app/recommend.py", "recommend"),
+        "langgraph": ("app/recommend.py", "build_recommend_graph"),
+        "claude-agent-sdk": ("app/recommend.py", "recommend"),
+    },
+    "10-hitl-approval": {
+        "raw-api": ("app/hitl.py", "start_run"),
+        "langchain": ("app/hitl.py", "start_run"),
+        "langgraph": ("app/hitl.py", "build_approval_graph"),
+        "claude-agent-sdk": ("app/approval.py", "start_run"),
+    },
 }
 
-# One line per approach: the claim the code below is evidence for.
-TAKE: dict[str, str] = {
-    "raw-api": "You write the loop, the parser, and the stop condition.",
-    "langchain": "The framework supplies tools and message types; the loop is still yours.",
-    "langgraph": "The loop becomes a graph: nodes, a conditional edge, and a cycle.",
-    "claude-agent-sdk": "There is no loop in the repo. The SDK owns it.",
+TITLES: dict[str, str] = {
+    "01-rag": "Q&A / RAG chatbot",
+    "02-code-generation": "Code generation",
+    "03-data-extraction": "Data extraction (structured output)",
+    "04-research-agent": "Research agent",
+    "05-support-triage": "Customer support triage",
+    "06-sql-agent": "SQL / DB agent",
+    "07-multi-agent": "Multi-agent orchestration",
+    "08-autonomous-react": "Autonomous ReAct",
+    "09-recommendations": "Personalised recommendations",
+    "10-hitl-approval": "Human-in-the-loop approval",
 }
+
+# The claim each snippet is evidence for. Falls back to the generic line when a
+# use case has nothing specific to say — better a true generality than a forced
+# observation.
+DEFAULT_TAKE: dict[str, str] = {
+    "raw-api": "You write the control flow; every byte sent is visible at the call site.",
+    "langchain": "Composition helpers do the plumbing; the control flow is still yours.",
+    "langgraph": "State and control flow become a typed graph.",
+    "claude-agent-sdk": "The SDK owns the loop; you supply tools and a prompt.",
+}
+
+TAKE: dict[str, dict[str, str]] = {
+    "01-rag": {
+        "raw-api": "Retrieve, build a prompt, call once. No framework needed.",
+        "langchain": "The natural fit: a retriever and an LCEL chain, declared not written.",
+        "langgraph": "A graph for a straight line — structural cost with no payoff here.",
+        "claude-agent-sdk": "No vector store: retrieval is lexical Grep/Read, so phrasing can miss.",
+    },
+    "03-data-extraction": {
+        "raw-api": "One call plus a validating parser — and a retry that tells the model what was wrong.",
+        "langchain": "Structured output is a first-class chain concern.",
+        "langgraph": "Extract → validate → repair is a genuine pipeline, so nodes earn their keep.",
+        "claude-agent-sdk": "An agent harness doing a one-shot job: no loop ever runs.",
+    },
+    "07-multi-agent": {
+        "raw-api": "You hand-roll the orchestrator, the hand-offs, and the review gate.",
+        "langchain": "Chains per role, sequenced by hand — the coordination is not the framework's job.",
+        "langgraph": "Roles are nodes and hand-offs are edges; the topology is the program.",
+        "claude-agent-sdk": "Subagents are data: a dict of definitions, each with its own context and tools.",
+    },
+    "08-autonomous-react": {
+        "raw-api": "You write the loop, the parser, and the stop condition.",
+        "langchain": "The framework supplies tools and message types; the loop is still yours.",
+        "langgraph": "The loop becomes a graph: nodes, a conditional edge, and a cycle.",
+        "claude-agent-sdk": "There is no loop in the repo. The SDK owns it.",
+    },
+    "10-hitl-approval": {
+        "raw-api": "A hand-built checkpoint store plus a /resume endpoint.",
+        "langchain": "A callback workaround: the framework has no native pause.",
+        "langgraph": "`interrupt()` — a durable pause the graph resumes from.",
+        "claude-agent-sdk": "`can_use_tool` gates the action, but only in-process.",
+    },
+}
+
+
+def take_for(usecase: str, approach: str) -> str:
+    return TAKE.get(usecase, {}).get(approach) or DEFAULT_TAKE[approach]
 
 
 def code_lines(path: Path) -> int:
@@ -85,7 +191,7 @@ def render(usecase: str) -> str:
     lines: list[str] = []
     add = lines.append
 
-    add(f"# {usecase} — the same problem, four ways")
+    add(f"# {usecase} — {TITLES[usecase]}, four ways")
     add("")
     add(
         "<!-- GENERATED by scripts/compare_usecase.py. Do not edit by hand; "
@@ -109,7 +215,7 @@ def render(usecase: str) -> str:
         project = REPO / approach / usecase
         add(
             f"| [`{approach}`](../../{approach}/{usecase}) | {app_size(project)} "
-            f"| `{module}::{symbol}` | {TAKE[approach]} |"
+            f"| `{module}::{symbol}` | {take_for(usecase, approach)} |"
         )
     add("")
     add(
@@ -127,7 +233,7 @@ def render(usecase: str) -> str:
         project = REPO / approach / usecase
         add(f"### {approach} — `{module}`")
         add("")
-        add(f"> {TAKE[approach]}")
+        add(f"> {take_for(usecase, approach)}")
         add("")
         add("```python")
         add(extract(project, module, symbol))
@@ -179,6 +285,38 @@ def render(usecase: str) -> str:
     return "\n".join(lines)
 
 
+def render_index() -> str:
+    lines = [
+        "# Comparison pages",
+        "",
+        "<!-- GENERATED by scripts/compare_usecase.py. Do not edit by hand. -->",
+        "",
+        "One page per use case: the core of each of the four implementations, what "
+        "each costs in code, and — where a traced run has been captured — what each "
+        "measurably did.",
+        "",
+        "| # | Use case | Page | Measured |",
+        "|---|---|---|---|",
+    ]
+    for usecase in sorted(MANIFEST):
+        number = usecase.split("-", 1)[0]
+        measured = "✅" if (DATA_DIR / f"{usecase}.json").exists() else "—"
+        lines.append(
+            f"| {number} | {TITLES[usecase]} | [`{usecase}`]({usecase}.md) | {measured} |"
+        )
+    lines += [
+        "",
+        "**Measured** means a real traced run of all four is recorded on the page "
+        "(`?trace=1`, see [`../trace-format.md`](../trace-format.md)). The rest "
+        "compare code and structure only — capturing runtime numbers costs API "
+        "calls, so it is done deliberately per use case rather than on every build.",
+        "",
+        "Regenerate everything: `python scripts/compare_usecase.py --all`.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("usecase", nargs="?", help="e.g. 08-autonomous-react")
@@ -217,6 +355,23 @@ def main() -> int:
         else:
             out.write_text(rendered, encoding="utf-8", newline="\n")
             print(f"wrote  {out.relative_to(REPO)}")
+
+    # The index lists every manifested use case, so it is only meaningful after a
+    # full pass — regenerating a single page must not truncate it.
+    if args.all:
+        index = OUT_DIR / "README.md"
+        rendered_index = render_index()
+        if args.check:
+            current = index.read_text(encoding="utf-8") if index.exists() else ""
+            if current != rendered_index:
+                print(f"STALE  {index.relative_to(REPO)} — re-run this script")
+                failed = True
+            else:
+                print(f"ok     {index.relative_to(REPO)}")
+        else:
+            index.write_text(rendered_index, encoding="utf-8", newline="\n")
+            print(f"wrote  {index.relative_to(REPO)}")
+
     return 1 if failed else 0
 
 

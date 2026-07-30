@@ -31,15 +31,17 @@ class StepModel(BaseModel):
 
 class RunResponse(BaseModel):
     answer: str
-    trace: list[StepModel]
+    # `steps`, not `trace`: this shipped as `trace` through v0.4.0, which
+    # collided with the shared trace document and made the four approaches
+    # disagree on field names for the same idea. Renamed in v0.5.0 — comparing
+    # approaches is the point of the repo, so their responses should line up.
+    steps: list[StepModel]
     num_turns: int
     cost_usd: float
     hit_turn_limit: bool
     # The shared trace document (docs/trace-format.md), present only with
-    # `?trace=1`. Named `run_trace` because this project already shipped `trace`
-    # as its tool-call list; renaming that would break existing callers. The
-    # cross-approach comparison uses the document, not the field name.
-    run_trace: dict[str, Any] | None = None
+    # `?trace=1` — same field name as the other three approaches.
+    trace: dict[str, Any] | None = None
 
 
 def create_app(runner: Runner | None = None) -> FastAPI:
@@ -94,11 +96,11 @@ def create_app(runner: Runner | None = None) -> FastAPI:
 
         return RunResponse(
             answer=out.answer,
-            trace=[StepModel(tool=s.tool, input=s.input) for s in out.trace],
+            steps=[StepModel(tool=s.tool, input=s.input) for s in out.trace],
             num_turns=out.num_turns,
             cost_usd=out.cost_usd,
             hit_turn_limit=out.hit_turn_limit,
-            run_trace=doc if trace else None,
+            trace=doc if trace else None,
         )
 
     return app

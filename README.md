@@ -44,10 +44,11 @@ Which approach suits which use case (and the two raw-api combos deliberately kep
 
 ### See the four approaches side by side
 
-**[`docs/compare/08-autonomous-react.md`](docs/compare/08-autonomous-react.md)** — the
-same ReAct task solved four ways: the core of each implementation, how much code
-each costs, and what a *real traced run* of each measured. Generated from the
-source it describes (`scripts/compare_usecase.py`), and CI fails if it drifts.
+**[`docs/compare/`](docs/compare/README.md)** — one page per use case: the core of
+each of the four implementations, how much code each costs, and (for
+[UC08](docs/compare/08-autonomous-react.md)) what a *real traced run* of each
+measured. Generated from the source it describes (`scripts/compare_usecase.py`),
+and CI fails if it drifts.
 
 Two things that page settles with numbers rather than opinion:
 
@@ -113,7 +114,33 @@ Two caveats that are about the *model*, not the code:
 
 > **Structured-output modes (UC3 prototype):** `03-data-extraction` also honours `LLM_STRUCTURED_MODE=text|native` — `text` is the portable prompt-and-parse path; `native` uses the provider's JSON / structured-output feature for higher reliability where available. See that project's README.
 
-## Quick start (any project)
+## Quick start — Docker (nothing to install, no API key)
+
+```bash
+docker compose up
+# → http://localhost:8000/health
+curl -X POST localhost:8000/run -H 'content-type: application/json' \
+     -d '{"question":"How long is the return window?"}'
+```
+
+That brings up Ollama, pulls a small local model (~1.4 GB, cached after the first
+run), and serves `raw-api/01-rag` against it. No account, no key, no gateway.
+Pick a different example with `PROJECT`:
+
+```bash
+PROJECT=langgraph/10-hitl-approval docker compose up --build
+```
+
+Add `?trace=1` to any `/run` call to see exactly what the agent did — the
+messages sent, every tool call, tokens and latency. See
+[`docs/trace-format.md`](docs/trace-format.md).
+
+> Covers the three OpenAI-surface approaches. **`claude-agent-sdk` is not in the
+> Docker path**: it speaks the Anthropic Messages API and spawns the Claude Code
+> CLI, so it needs Node plus a real Anthropic-compatible endpoint. Run those
+> projects directly — each README explains the prerequisites.
+
+## Quick start — local (any project)
 
 Each project is independent and uses [`uv`](https://docs.astral.sh/uv/):
 

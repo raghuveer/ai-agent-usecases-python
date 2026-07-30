@@ -1,0 +1,72 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+#
+# The zero-install path: `docker compose up` gives you a running example and a
+# local model, with no API key and no accounts.
+#
+#   docker compose up                     # raw-api/01-rag on local Qwen
+#   PROJECT=langgraph/10-hitl-approval docker compose up --build
+#
+# The repo's own default configuration points at a private AI gateway, which is
+# useful if you have one and a dead end if you do not. This wires the examples
+# straight to Ollama instead — same code, no code changes, just env.
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    healthcheck:
+      # `ollama list` is the cheapest thing that proves the API is answering.
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  model-pull:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    # ~1.4 GB. Small enough for a first run on a laptop; large enough to answer
+    # RAG, triage, SQL and recommendation tasks. Pulls once, then cached in the
+    # volume. The ReAct and extraction use cases want a stronger model — see the
+    # "Model choice" note in those projects' READMEs.
+    entrypoint: ["ollama", "pull", "${LLM_MODEL:-qwen3:1.7b}"]
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      args:
+        PROJECT: ${PROJECT:-raw-api/01-rag}
+    depends_on:
+      model-pull:
+        condition: service_completed_successfully
+    ports:
+      - "8000:8000"
+    environment:
+      # Ollama's OpenAI-compatible surface. The examples are written against
+      # that protocol, so nothing in the code changes — this is exactly the
+      # "Use a different model or provider" table in the README, applied.
+      LLM_BASE_URL: http://ollama:11434/v1
+      # Ollama ignores the key, but the OpenAI client requires a non-empty one.
+      LLM_GATEWAY_KEY: ollama-local-no-key-needed
+      LLM_MODEL: ${LLM_MODEL:-qwen3:1.7b}
+      # `?trace=1` works out of the box; nothing is written to disk.
+      TRACE_SINK: none
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+volumes:
+  ollama-models:

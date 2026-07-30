@@ -61,8 +61,8 @@ def test_run_returns_answer_and_readable_trace():
     body = make_client().post("/run", json={"question": "What is our margin?"}).json()
     assert body["answer"] == "Margin is 28.9%."
     # mcp__server__ prefixes are stripped so the trace reads as tool names.
-    assert [s["tool"] for s in body["trace"]] == ["lookup_metric", "calculate"]
-    assert body["trace"][0]["input"] == {"name": "monthly_revenue_usd"}
+    assert [s["tool"] for s in body["steps"]] == ["lookup_metric", "calculate"]
+    assert body["steps"][0]["input"] == {"name": "monthly_revenue_usd"}
     assert body["hit_turn_limit"] is False
 
 
@@ -156,13 +156,13 @@ async def test_options_register_tools_and_raise_turn_ceiling():
 # Tracing — deliberately partial. See app/trace.py and docs/trace-format.md
 # --------------------------------------------------------------------------- #
 def test_trace_absent_unless_requested():
-    assert make_client().post("/run", json={"question": "x"}).json()["run_trace"] is None
+    assert make_client().post("/run", json={"question": "x"}).json()["trace"] is None
 
 
 def test_trace_reports_tool_calls_and_real_cost():
     trace = make_client().post(
         "/run?trace=1", json={"question": "x"}
-    ).json()["run_trace"]
+    ).json()["trace"]
 
     assert trace["schema_version"] == 1
     assert trace["approach"] == "claude-agent-sdk"
@@ -185,7 +185,7 @@ def test_trace_marks_what_the_sdk_cannot_expose_as_absent_not_zero():
     """
     trace = make_client().post(
         "/run?trace=1", json={"question": "x"}
-    ).json()["run_trace"]
+    ).json()["trace"]
 
     assert trace["gen_ai"]["usage"] == {"input_tokens": None, "output_tokens": None}
     for span in trace["spans"]:
@@ -199,6 +199,6 @@ def test_trace_marks_what_the_sdk_cannot_expose_as_absent_not_zero():
 def test_capped_run_is_traced_as_capped():
     trace = make_client(stop_reason="max_turns").post(
         "/run?trace=1", json={"question": "x"}
-    ).json()["run_trace"]
+    ).json()["trace"]
     assert trace["outcome"]["status"] == "capped"
     assert trace["outcome"]["stop_reason"] == "max_turns"

@@ -52,9 +52,7 @@ else:
     make = lambda: TestClient(create_app())
 with make() as client:
     body = client.post("/run?trace=1", json=payload).json()
-# `run_trace` first: claude-agent-sdk also has a `trace` key holding its
-# tool-call LIST, which is truthy and would win the fallback.
-doc = body.get("run_trace") or body.get("trace")
+doc = body.get("trace")
 if not doc:
     print(json.dumps({"error": "no trace in response", "keys": list(body)}))
     sys.exit(1)
