@@ -17,7 +17,7 @@ jobs:
     outputs:
       projects: ${{ steps.find.outputs.projects }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - id: find
         # Every directory containing tests/test_unit.py becomes a matrix entry.
         run: |
@@ -35,9 +35,9 @@ jobs:
         project: ${{ fromJson(needs.discover.outputs.projects) }}
     name: ${{ matrix.project }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
       - name: Set up Python
         run: uv python install 3.12
       - name: Create venv + install (dev extras)
