@@ -9,7 +9,7 @@ Every approach here solves an identical task with identical tools. What differs 
 | Approach | `app/` lines | Core symbol | The trade |
 |---|---:|---|---|
 | [`raw-api`](../../raw-api/09-recommendations) | 243 | `app/recommend.py::recommend` | You write the control flow; every byte sent is visible at the call site. |
-| [`langchain`](../../langchain/09-recommendations) | 237 | `app/recommend.py::recommend` | Composition helpers do the plumbing; the control flow is still yours. |
+| [`langchain`](../../langchain/09-recommendations) | 305 | `app/recommend.py::recommend` | Composition helpers do the plumbing; the control flow is still yours. |
 | [`langgraph`](../../langgraph/09-recommendations) | 242 | `app/recommend.py::build_recommend_graph` | State and control flow become a typed graph. |
 | [`claude-agent-sdk`](../../claude-agent-sdk/09-recommendations) | 458 | `app/recommend.py::recommend` | The SDK owns the loop; you supply tools and a prompt. |
 

@@ -201,11 +201,18 @@ Ollama, no gateway — surfaced four things the usual configuration hides:
     function: LangChain treats it as a transform, so it yields as it goes.
     `invoke()` is unaffected — the generator is drained.
 
-    **Latent in the other nine langchain projects**: they carry the same
-    `| strip_thinking` step and would fail the same way the moment anyone
-    streams them. Worth sweeping when streaming reaches them; harmless until
-    then, which is exactly why it is recorded here rather than left to be
-    rediscovered.
+    **Swept 2026-07-31.** Seven more chain sites carried the same step —
+    `01-rag`, `02-code-generation`, `03-data-extraction`, `04-research-agent`,
+    `05-support-triage`, `06-sql-agent`, `09-recommendations` — all now use
+    `strip_thinking_stream`. (`08` drives the model directly and has no chain;
+    `_template` reads `.content`, so it cannot reintroduce the bug into new
+    projects.) That is seven, not the "nine" first estimated: two of the
+    original matches were the docstring example inside `llm.py` itself.
+
+    Verified by streaming a swept chain live rather than trusting the tests,
+    which only exercise `invoke()`: `05-support-triage` now yields **141
+    chunks, first at 1.30s of an 8.48s run**. Before the fix it would have been
+    one chunk at the end.
 
 ## Status
 - **10/10 use cases × 4 approaches = 40 projects built.**

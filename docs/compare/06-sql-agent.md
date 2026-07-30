@@ -9,7 +9,7 @@ Every approach here solves an identical task with identical tools. What differs 
 | Approach | `app/` lines | Core symbol | The trade |
 |---|---:|---|---|
 | [`raw-api`](../../raw-api/06-sql-agent) | 274 | `app/sqlagent.py::answer` | You write the control flow; every byte sent is visible at the call site. |
-| [`langchain`](../../langchain/06-sql-agent) | 251 | `app/sqlagent.py::answer_question` | Composition helpers do the plumbing; the control flow is still yours. |
+| [`langchain`](../../langchain/06-sql-agent) | 319 | `app/sqlagent.py::answer_question` | Composition helpers do the plumbing; the control flow is still yours. |
 | [`langgraph`](../../langgraph/06-sql-agent) | 285 | `app/sqlagent.py::build_sql_graph` | State and control flow become a typed graph. |
 | [`claude-agent-sdk`](../../claude-agent-sdk/06-sql-agent) | 471 | `app/sql_agent.py::ask` | The SDK owns the loop; you supply tools and a prompt. |
 

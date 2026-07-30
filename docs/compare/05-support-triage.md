@@ -9,7 +9,7 @@ Every approach here solves an identical task with identical tools. What differs 
 | Approach | `app/` lines | Core symbol | The trade |
 |---|---:|---|---|
 | [`raw-api`](../../raw-api/05-support-triage) | 278 | `app/triage.py::triage` | You write the control flow; every byte sent is visible at the call site. |
-| [`langchain`](../../langchain/05-support-triage) | 239 | `app/triage.py::triage` | Composition helpers do the plumbing; the control flow is still yours. |
+| [`langchain`](../../langchain/05-support-triage) | 307 | `app/triage.py::triage` | Composition helpers do the plumbing; the control flow is still yours. |
 | [`langgraph`](../../langgraph/05-support-triage) | 278 | `app/triage.py::build_triage_graph` | State and control flow become a typed graph. |
 | [`claude-agent-sdk`](../../claude-agent-sdk/05-support-triage) | 402 | `app/triage.py::triage` | The SDK owns the loop; you supply tools and a prompt. |
 

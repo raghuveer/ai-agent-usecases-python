@@ -9,7 +9,7 @@ Every approach here solves an identical task with identical tools. What differs 
 | Approach | `app/` lines | Core symbol | The trade |
 |---|---:|---|---|
 | [`raw-api`](../../raw-api/03-data-extraction) | 252 | `app/extract.py::extract_invoice` | One call plus a validating parser — and a retry that tells the model what was wrong. |
-| [`langchain`](../../langchain/03-data-extraction) | 261 | `app/extract.py::extract_invoice` | Structured output is a first-class chain concern. |
+| [`langchain`](../../langchain/03-data-extraction) | 329 | `app/extract.py::extract_invoice` | Structured output is a first-class chain concern. |
 | [`langgraph`](../../langgraph/03-data-extraction) | 261 | `app/extract.py::build_extract_graph` | Extract → validate → repair is a genuine pipeline, so nodes earn their keep. |
 | [`claude-agent-sdk`](../../claude-agent-sdk/03-data-extraction) | 360 | `app/extract.py::extract` | An agent harness doing a one-shot job: no loop ever runs. |
 

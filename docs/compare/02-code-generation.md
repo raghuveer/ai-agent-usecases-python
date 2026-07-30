@@ -9,7 +9,7 @@ Every approach here solves an identical task with identical tools. What differs 
 | Approach | `app/` lines | Core symbol | The trade |
 |---|---:|---|---|
 | [`raw-api`](../../raw-api/02-code-generation) | 256 | `app/codegen.py::generate` | You write the control flow; every byte sent is visible at the call site. |
-| [`langchain`](../../langchain/02-code-generation) | 243 | `app/codegen.py::generate` | Composition helpers do the plumbing; the control flow is still yours. |
+| [`langchain`](../../langchain/02-code-generation) | 311 | `app/codegen.py::generate` | Composition helpers do the plumbing; the control flow is still yours. |
 | [`langgraph`](../../langgraph/02-code-generation) | 284 | `app/codegen.py::build_codegen_graph` | State and control flow become a typed graph. |
 | [`claude-agent-sdk`](../../claude-agent-sdk/02-code-generation) | 344 | `app/codegen.py::generate` | The SDK owns the loop; you supply tools and a prompt. |
 
