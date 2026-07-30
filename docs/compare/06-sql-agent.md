@@ -8,9 +8,9 @@ Every approach here solves an identical task with identical tools. What differs 
 
 | Approach | `app/` lines | Core symbol | The trade |
 |---|---:|---|---|
-| [`raw-api`](../../raw-api/06-sql-agent) | 261 | `app/sqlagent.py::answer` | You write the control flow; every byte sent is visible at the call site. |
-| [`langchain`](../../langchain/06-sql-agent) | 238 | `app/sqlagent.py::answer_question` | Composition helpers do the plumbing; the control flow is still yours. |
-| [`langgraph`](../../langgraph/06-sql-agent) | 272 | `app/sqlagent.py::build_sql_graph` | State and control flow become a typed graph. |
+| [`raw-api`](../../raw-api/06-sql-agent) | 274 | `app/sqlagent.py::answer` | You write the control flow; every byte sent is visible at the call site. |
+| [`langchain`](../../langchain/06-sql-agent) | 251 | `app/sqlagent.py::answer_question` | Composition helpers do the plumbing; the control flow is still yours. |
+| [`langgraph`](../../langgraph/06-sql-agent) | 285 | `app/sqlagent.py::build_sql_graph` | State and control flow become a typed graph. |
 | [`claude-agent-sdk`](../../claude-agent-sdk/06-sql-agent) | 471 | `app/sql_agent.py::ask` | The SDK owns the loop; you supply tools and a prompt. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
@@ -96,7 +96,7 @@ def build_sql_graph(conn: sqlite3.Connection, llm: BaseChatModel,
             ),
         ]
         reply = llm.invoke(messages)
-        return {"schema": schema, "sql": extract_sql(reply.content)}
+        return {"schema": schema, "sql": extract_sql(strip_thinking(reply.content))}
 
     def validate(state: SQLState) -> dict:
         try:

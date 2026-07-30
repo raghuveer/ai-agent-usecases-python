@@ -8,9 +8,9 @@ Every approach here solves an identical task with identical tools. What differs 
 
 | Approach | `app/` lines | Core symbol | The trade |
 |---|---:|---|---|
-| [`raw-api`](../../raw-api/10-hitl-approval) | 232 | `app/hitl.py::start_run` | A hand-built checkpoint store plus a /resume endpoint. |
-| [`langchain`](../../langchain/10-hitl-approval) | 210 | `app/hitl.py::start_run` | A callback workaround: the framework has no native pause. |
-| [`langgraph`](../../langgraph/10-hitl-approval) | 232 | `app/hitl.py::build_approval_graph` | `interrupt()` — a durable pause the graph resumes from. |
+| [`raw-api`](../../raw-api/10-hitl-approval) | 245 | `app/hitl.py::start_run` | A hand-built checkpoint store plus a /resume endpoint. |
+| [`langchain`](../../langchain/10-hitl-approval) | 223 | `app/hitl.py::start_run` | A callback workaround: the framework has no native pause. |
+| [`langgraph`](../../langgraph/10-hitl-approval) | 247 | `app/hitl.py::build_approval_graph` | `interrupt()` — a durable pause the graph resumes from. |
 | [`claude-agent-sdk`](../../claude-agent-sdk/10-hitl-approval) | 494 | `app/approval.py::start_run` | `can_use_tool` gates the action, but only in-process. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
@@ -69,7 +69,9 @@ def build_approval_graph(llm: BaseChatModel, settings=None):
             HumanMessage(content=f"Request: {state['request']}\n\nDraft the action message:"),
         ]
         reply = llm.invoke(messages)
-        text = (reply.content if hasattr(reply, "content") else str(reply)).strip()
+        text = strip_thinking(
+            reply.content if hasattr(reply, "content") else str(reply)
+        )
         if not text:
             text = "(the model returned an empty draft)"
         return {"proposed_action": text, "status": "awaiting_approval"}

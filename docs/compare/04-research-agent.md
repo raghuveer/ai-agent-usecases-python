@@ -8,9 +8,9 @@ Every approach here solves an identical task with identical tools. What differs 
 
 | Approach | `app/` lines | Core symbol | The trade |
 |---|---:|---|---|
-| [`raw-api`](../../raw-api/04-research-agent) | 400 | `app/agent.py::run_agent` | You write the control flow; every byte sent is visible at the call site. |
-| [`langchain`](../../langchain/04-research-agent) | 402 | `app/agent.py::run_agent` | Composition helpers do the plumbing; the control flow is still yours. |
-| [`langgraph`](../../langgraph/04-research-agent) | 442 | `app/agent.py::build_agent_graph` | State and control flow become a typed graph. |
+| [`raw-api`](../../raw-api/04-research-agent) | 413 | `app/agent.py::run_agent` | You write the control flow; every byte sent is visible at the call site. |
+| [`langchain`](../../langchain/04-research-agent) | 415 | `app/agent.py::run_agent` | Composition helpers do the plumbing; the control flow is still yours. |
+| [`langgraph`](../../langgraph/04-research-agent) | 455 | `app/agent.py::build_agent_graph` | State and control flow become a typed graph. |
 | [`claude-agent-sdk`](../../claude-agent-sdk/04-research-agent) | 348 | `app/research.py::research` | The SDK owns the loop; you supply tools and a prompt. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
@@ -201,7 +201,7 @@ def build_agent_graph(corpus: Corpus, llm: BaseChatModel):
                 content=_build_user_prompt(state["question"], state["transcript"])
             ),
         ]
-        reply = llm.invoke(messages).content
+        reply = strip_thinking(llm.invoke(messages).content)
         # The endpoint may not honour `stop`, so cut the turn at the first
         # Observation: here — the graph, not the model, supplies observations.
         parsed = parse_step(

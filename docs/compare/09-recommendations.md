@@ -8,9 +8,9 @@ Every approach here solves an identical task with identical tools. What differs 
 
 | Approach | `app/` lines | Core symbol | The trade |
 |---|---:|---|---|
-| [`raw-api`](../../raw-api/09-recommendations) | 230 | `app/recommend.py::recommend` | You write the control flow; every byte sent is visible at the call site. |
-| [`langchain`](../../langchain/09-recommendations) | 224 | `app/recommend.py::recommend` | Composition helpers do the plumbing; the control flow is still yours. |
-| [`langgraph`](../../langgraph/09-recommendations) | 229 | `app/recommend.py::build_recommend_graph` | State and control flow become a typed graph. |
+| [`raw-api`](../../raw-api/09-recommendations) | 243 | `app/recommend.py::recommend` | You write the control flow; every byte sent is visible at the call site. |
+| [`langchain`](../../langchain/09-recommendations) | 237 | `app/recommend.py::recommend` | Composition helpers do the plumbing; the control flow is still yours. |
+| [`langgraph`](../../langgraph/09-recommendations) | 242 | `app/recommend.py::build_recommend_graph` | State and control flow become a typed graph. |
 | [`claude-agent-sdk`](../../claude-agent-sdk/09-recommendations) | 458 | `app/recommend.py::recommend` | The SDK owns the loop; you supply tools and a prompt. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
@@ -107,7 +107,7 @@ def build_recommend_graph(llm: BaseChatModel, settings: Settings | None = None):
                 SystemMessage(content=system_prompt(SYSTEM_INSTRUCTION, settings)),
                 HumanMessage(content=_reason_prompt(item, profile)),
             ]
-            reason = llm.invoke(messages).content
+            reason = strip_thinking(llm.invoke(messages).content)
             recommendations.append(
                 {"item_id": item.id, "title": item.title, "reason": reason}
             )

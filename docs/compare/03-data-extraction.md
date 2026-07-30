@@ -8,9 +8,9 @@ Every approach here solves an identical task with identical tools. What differs 
 
 | Approach | `app/` lines | Core symbol | The trade |
 |---|---:|---|---|
-| [`raw-api`](../../raw-api/03-data-extraction) | 239 | `app/extract.py::extract_invoice` | One call plus a validating parser — and a retry that tells the model what was wrong. |
-| [`langchain`](../../langchain/03-data-extraction) | 248 | `app/extract.py::extract_invoice` | Structured output is a first-class chain concern. |
-| [`langgraph`](../../langgraph/03-data-extraction) | 248 | `app/extract.py::build_extract_graph` | Extract → validate → repair is a genuine pipeline, so nodes earn their keep. |
+| [`raw-api`](../../raw-api/03-data-extraction) | 252 | `app/extract.py::extract_invoice` | One call plus a validating parser — and a retry that tells the model what was wrong. |
+| [`langchain`](../../langchain/03-data-extraction) | 261 | `app/extract.py::extract_invoice` | Structured output is a first-class chain concern. |
+| [`langgraph`](../../langgraph/03-data-extraction) | 261 | `app/extract.py::build_extract_graph` | Extract → validate → repair is a genuine pipeline, so nodes earn their keep. |
 | [`claude-agent-sdk`](../../claude-agent-sdk/03-data-extraction) | 360 | `app/extract.py::extract` | An agent harness doing a one-shot job: no loop ever runs. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
@@ -141,7 +141,7 @@ def build_extract_graph(llm: BaseChatModel, settings: Settings | None = None):
                 return {"raw": raw, "error": str(err), "attempts": attempts}
             return {"raw": raw, "attempts": attempts}
         result = llm.invoke(messages)
-        return {"raw": result.content, "attempts": attempts}
+        return {"raw": strip_thinking(result.content), "attempts": attempts}
 
     def validate(state: ExtractState) -> dict:
         try:

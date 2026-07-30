@@ -8,9 +8,9 @@ Every approach here solves an identical task with identical tools. What differs 
 
 | Approach | `app/` lines | Core symbol | The trade |
 |---|---:|---|---|
-| [`raw-api`](../../raw-api/08-autonomous-react) | 638 | `app/react.py::run_react` | You write the loop, the parser, and the stop condition. |
-| [`langchain`](../../langchain/08-autonomous-react) | 624 | `app/react.py::run_react` | The framework supplies tools and message types; the loop is still yours. |
-| [`langgraph`](../../langgraph/08-autonomous-react) | 683 | `app/react.py::build_react_graph` | The loop becomes a graph: nodes, a conditional edge, and a cycle. |
+| [`raw-api`](../../raw-api/08-autonomous-react) | 651 | `app/react.py::run_react` | You write the loop, the parser, and the stop condition. |
+| [`langchain`](../../langchain/08-autonomous-react) | 639 | `app/react.py::run_react` | The framework supplies tools and message types; the loop is still yours. |
+| [`langgraph`](../../langgraph/08-autonomous-react) | 698 | `app/react.py::build_react_graph` | The loop becomes a graph: nodes, a conditional edge, and a cycle. |
 | [`claude-agent-sdk`](../../claude-agent-sdk/08-autonomous-react) | 538 | `app/react_agent.py::run_react` | There is no loop in the repo. The SDK owns it. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
@@ -114,7 +114,9 @@ def run_react(
         # `stop` is sent only where the endpoint honours it, so the cut is also
         # applied locally — before the turn enters the transcript.
         reply = llm.invoke(messages, stop=stop_sequences(llm))
-        text = reply.content if isinstance(reply, AIMessage) else str(reply)
+        text = strip_thinking(
+            reply.content if isinstance(reply, AIMessage) else str(reply)
+        )
         text = truncate_at_stop(text)
         messages.append(AIMessage(content=text))
 
@@ -162,7 +164,9 @@ def build_react_graph(llm: BaseChatModel, tools: ToolRegistry | None = None):
         # `stop` is sent only where the endpoint honours it, so the cut is also
         # applied locally — before the turn enters the message history.
         reply = llm.invoke(state["messages"], stop=stop_sequences(llm))
-        text = reply.content if isinstance(reply, AIMessage) else str(reply)
+        text = strip_thinking(
+            reply.content if isinstance(reply, AIMessage) else str(reply)
+        )
         text = truncate_at_stop(text)
 
         final = parse_final_answer(text)

@@ -8,9 +8,9 @@ Every approach here solves an identical task with identical tools. What differs 
 
 | Approach | `app/` lines | Core symbol | The trade |
 |---|---:|---|---|
-| [`raw-api`](../../raw-api/07-multi-agent) | 289 | `app/agents.py::orchestrate` | You hand-roll the orchestrator, the hand-offs, and the review gate. |
-| [`langchain`](../../langchain/07-multi-agent) | 272 | `app/agents.py::orchestrate` | Chains per role, sequenced by hand — the coordination is not the framework's job. |
-| [`langgraph`](../../langgraph/07-multi-agent) | 307 | `app/graph.py::build_multi_agent_graph` | Roles are nodes and hand-offs are edges; the topology is the program. |
+| [`raw-api`](../../raw-api/07-multi-agent) | 302 | `app/agents.py::orchestrate` | You hand-roll the orchestrator, the hand-offs, and the review gate. |
+| [`langchain`](../../langchain/07-multi-agent) | 285 | `app/agents.py::orchestrate` | Chains per role, sequenced by hand — the coordination is not the framework's job. |
+| [`langgraph`](../../langgraph/07-multi-agent) | 322 | `app/graph.py::build_multi_agent_graph` | Roles are nodes and hand-offs are edges; the topology is the program. |
 | [`claude-agent-sdk`](../../claude-agent-sdk/07-multi-agent) | 348 | `app/team.py::run_team` | Subagents are data: a dict of definitions, each with its own context and tools. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.

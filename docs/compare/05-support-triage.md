@@ -8,9 +8,9 @@ Every approach here solves an identical task with identical tools. What differs 
 
 | Approach | `app/` lines | Core symbol | The trade |
 |---|---:|---|---|
-| [`raw-api`](../../raw-api/05-support-triage) | 265 | `app/triage.py::triage` | You write the control flow; every byte sent is visible at the call site. |
-| [`langchain`](../../langchain/05-support-triage) | 226 | `app/triage.py::triage` | Composition helpers do the plumbing; the control flow is still yours. |
-| [`langgraph`](../../langgraph/05-support-triage) | 265 | `app/triage.py::build_triage_graph` | State and control flow become a typed graph. |
+| [`raw-api`](../../raw-api/05-support-triage) | 278 | `app/triage.py::triage` | You write the control flow; every byte sent is visible at the call site. |
+| [`langchain`](../../langchain/05-support-triage) | 239 | `app/triage.py::triage` | Composition helpers do the plumbing; the control flow is still yours. |
+| [`langgraph`](../../langgraph/05-support-triage) | 278 | `app/triage.py::build_triage_graph` | State and control flow become a typed graph. |
 | [`claude-agent-sdk`](../../claude-agent-sdk/05-support-triage) | 402 | `app/triage.py::triage` | The SDK owns the loop; you supply tools and a prompt. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
@@ -107,7 +107,7 @@ def build_triage_graph(llm: BaseChatModel, settings: Settings | None = None):
             SystemMessage(content=system_prompt(CLASSIFIER_SYSTEM, settings)),
             HumanMessage(content=user),
         ]
-        raw = llm.invoke(messages).content
+        raw = strip_thinking(llm.invoke(messages).content)
         intent, confidence = parse_classification(raw)
         return {"intent": intent, "confidence": confidence}
 
@@ -119,7 +119,7 @@ def build_triage_graph(llm: BaseChatModel, settings: Settings | None = None):
                     content=state["history"] + f"Customer message: {state['message']}"
                 ),
             ]
-            return {"response": llm.invoke(messages).content}
+            return {"response": strip_thinking(llm.invoke(messages).content)}
 
         return specialist
 
