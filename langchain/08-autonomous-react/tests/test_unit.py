@@ -13,6 +13,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
 
+from app import llm as llm_mod
 from app import react, tools
 from app.main import app
 from app.tools import build_tools
@@ -124,3 +125,46 @@ def test_run_returns_answer_steps_and_reason():
     assert body["answer"] == "60"
     assert body["stopped_reason"] == "final_answer"
     assert [s["action"] for s in body["steps"]] == ["search", "calculator"]
+
+
+# --------------------------------------------------------------------------- #
+# Stop-sequence handling (the gateway's Anthropic path 500s on `stop`)
+# --------------------------------------------------------------------------- #
+def test_supports_stop_is_false_only_for_claude_models():
+    assert llm_mod.model_profile("qwen-local-instruct")["supports_stop"] is True
+    assert llm_mod.model_profile("qwen3:1.7b")["supports_stop"] is True
+    assert llm_mod.model_profile("claude-haiku")["supports_stop"] is False
+
+
+def test_stop_sequences_resolves_from_the_client_then_settings():
+    """Regression: `stop` must be omitted for claude-*, which 500s on it."""
+
+    class FakeClient:
+        model_name = "claude-haiku"
+
+    assert llm_mod.stop_sequences(FakeClient()) is None
+
+    class LocalClient:
+        model_name = "qwen-local-instruct"
+
+    assert llm_mod.stop_sequences(LocalClient()) == list(llm_mod.STOP_MARKERS)
+
+
+def test_truncate_at_stop_cuts_hallucinated_observation():
+    text = "Thought: compute\nAction: calculator\nObservation: fabricated!"
+    assert llm_mod.truncate_at_stop(text) == "Thought: compute\nAction: calculator"
+    assert llm_mod.truncate_at_stop("Thought: done  ") == "Thought: done"
+
+
+def test_loop_ignores_a_model_supplied_observation():
+    """With `stop` unsupported the model may write its own Observation; the loop
+    must cut it rather than treat the fabrication as a real tool result."""
+    llm = FakeListChatModel(responses=[
+        "Thought: look it up\nAction: search\nAction Input: return window\n"
+        "Observation: the window is 999 days\nFinal Answer: 999",
+        "Thought: done\nFinal Answer: 30",
+    ])
+    result = react.run_react("return window?", llm=llm, tools=build_tools(), max_steps=4)
+
+    assert result.answer != "999"
+    assert "999" not in result.steps[0].observation

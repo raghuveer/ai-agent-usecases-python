@@ -37,7 +37,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 
-from .llm import system_prefix
+from .llm import stop_sequences, system_prefix, truncate_at_stop
 from .tools import TOOLS, UnsafeExpression
 
 ToolRegistry = dict  # name -> (callable, description)
@@ -140,8 +140,11 @@ def build_react_graph(llm: BaseChatModel, tools: ToolRegistry | None = None):
     def reason(state: ReactState) -> dict:
         """Call the LLM with the transcript; parse a tool call or final answer."""
         # Stop after the model's Action so it can't hallucinate the Observation.
-        reply = llm.invoke(state["messages"], stop=["Observation:"])
+        # `stop` is sent only where the endpoint honours it, so the cut is also
+        # applied locally — before the turn enters the message history.
+        reply = llm.invoke(state["messages"], stop=stop_sequences(llm))
         text = reply.content if isinstance(reply, AIMessage) else str(reply)
+        text = truncate_at_stop(text)
 
         final = parse_final_answer(text)
         if final is not None:

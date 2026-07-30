@@ -69,7 +69,8 @@ Working rules that differ from Phases 0–5:
 - **Phase 5** — released as v0.2.0: navigable root README, CI running unit tests only, per-folder READMEs, security review, dependency gates. ✅
 - **Phase 6** — `claude-agent-sdk` × 10 use cases built; **131 offline unit tests green**; 14 integration tests written, collecting, and gated. ✅
 - **Phase 6b — live validation** (2026-07-29): fresh `sk-aiup-…` key minted under phase `poc-ai-usecases-agentsdk`; **all 10 use cases run live and passing** across two passes. Exposed **8 defects invisible to mocked tests** (see `TRACKING.md` → Live-run findings) — including `setting_sources=[]` failing to isolate developer memory, and the delegation tool being named `Agent` rather than `Task`. All fixed with regression tests; turn/budget defaults re-baselined from measured cost. ✅
-- **ALL 10 use cases × 4 approaches = 40 projects complete.**
+- **Phase 6c — full live sweep of the older 30** (2026-07-30): every pre-`claude-agent-sdk` project run live, not just the three spot-checks. 24 passed as-is; the 6 text-ReAct projects (UC04, UC08 × 3 approaches) failed on their first LLM call because **the gateway 500s on an OpenAI `stop` array over its Anthropic path**. Fixed by making the stop-cut client-side (`supports_stop` capability + `truncate_at_stop()`), with regression tests in all six. **30/30 now pass live**; see `TRACKING.md` → finding 11. ✅
+- **ALL 10 use cases × 4 approaches = 40 projects complete. 509 offline unit tests green; all 40 live-verified.**
 
 ### Notes for whoever runs this next
 - **Minting keys now needs MFA.** `seed-virtual-keys.mjs` predates ADR 0042: a bare login returns a `token_use: mfa_pending` token (300s TTL) with no roles, so project creation 403s with "admin role required". Complete the step-up at `POST /v1/auth/mfa/verify` with `{"factorType": "...", "code": "..."}` before driving projects-ms.

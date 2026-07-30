@@ -31,10 +31,33 @@ def model_profile(model: str) -> dict:
 
     The single place model-family quirks live. Extend here to support a new
     model family (e.g. a different thinking-mode toggle) -- nothing else changes.
+
+    ``supports_stop`` is False for ``claude-*``: those aliases route through the
+    gateway's Anthropic surface, which does not translate an OpenAI ``stop``
+    array into Anthropic's ``stop_sequences`` and answers 500 instead.
     """
-    if model.lower().startswith("qwen3"):
-        return {"thinking_prefix": "/no_think\n"}
-    return {"thinking_prefix": ""}
+    m = model.lower()
+    if m.startswith("qwen3"):
+        return {"thinking_prefix": "/no_think\n", "supports_stop": True}
+    if m.startswith("claude"):
+        return {"thinking_prefix": "", "supports_stop": False}
+    return {"thinking_prefix": "", "supports_stop": True}
+
+
+def truncate_at_stop(text: str, markers: tuple[str, ...] | list[str]) -> str:
+    """Cut ``text`` at the earliest stop marker.
+
+    Server-side ``stop`` is an optimisation, not a guarantee: some endpoints
+    ignore it and the gateway's Anthropic path rejects it outright. Enforcing the
+    cut here keeps the loop's invariant -- the model never supplies its own
+    Observation -- whatever the endpoint does.
+    """
+    cut = len(text)
+    for marker in markers:
+        found = text.find(marker)
+        if found != -1:
+            cut = min(cut, found)
+    return text[:cut].strip()
 
 
 def apply_no_think(model: str, system_prompt: str) -> str:
@@ -68,7 +91,10 @@ def chat(
         max_tokens=max_tokens,
         temperature=temperature,
     )
-    if stop:
+    if stop and model_profile(model)["supports_stop"]:
         kwargs["stop"] = stop
     resp = client.chat.completions.create(**kwargs)
-    return (resp.choices[0].message.content or "").strip()
+    text = resp.choices[0].message.content or ""
+    # Enforce the cut locally too: `stop` is advisory, and unsupported on some
+    # endpoints, so the loop cannot depend on the server having honoured it.
+    return truncate_at_stop(text, stop) if stop else text.strip()

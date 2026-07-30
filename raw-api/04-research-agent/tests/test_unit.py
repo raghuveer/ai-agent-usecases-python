@@ -181,6 +181,40 @@ def test_apply_no_think_qwen3_only():
     assert llm.apply_no_think("claude-haiku-4-5", "x") == "x"
 
 
+def test_supports_stop_is_false_only_for_claude_models():
+    """The gateway's Anthropic path 500s on an OpenAI `stop` array."""
+    assert llm.model_profile("qwen-local-instruct")["supports_stop"] is True
+    assert llm.model_profile("qwen3:1.7b")["supports_stop"] is True
+    assert llm.model_profile("claude-haiku")["supports_stop"] is False
+
+
+def test_truncate_at_stop_cuts_hallucinated_observation():
+    text = "Thought: look it up\nAction: search\nObservation: fabricated!"
+    assert llm.truncate_at_stop(text) == "Thought: look it up\nAction: search"
+    # Nothing to cut: returned unchanged (stripped).
+    assert llm.truncate_at_stop("Thought: done  ") == "Thought: done"
+
+
+def test_chat_omits_stop_for_claude_but_still_truncates():
+    """Regression: sending `stop` to claude-* 500s, so the cut happens locally."""
+    client = _fake_openai_client(["Action: search\nObservation: fake"])
+    out = llm.chat(
+        client,
+        model="claude-haiku",
+        system_prompt="s",
+        user_prompt="u",
+    )
+    assert "stop" not in client.chat.completions.create.call_args.kwargs
+    assert out == "Action: search"
+
+
+def test_chat_sends_stop_for_models_that_support_it():
+    client = _fake_openai_client(["Action: search"])
+    llm.chat(client, model="qwen-local-instruct", system_prompt="s", user_prompt="u")
+    kwargs = client.chat.completions.create.call_args.kwargs
+    assert kwargs["stop"] == list(llm.STOP_MARKERS)
+
+
 # --------------------------------------------------------------------------- #
 # HTTP level (mocked corpus + mocked openai client, no network)
 # --------------------------------------------------------------------------- #

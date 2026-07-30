@@ -63,7 +63,35 @@ Three use cases were run live against the gateway (UC02, UC08, UC10). **Every on
 
 One further failure was a **test bug, not an app bug**: UC03 asserted `"Northwind" in vendor` case-sensitively while the agent correctly copied `NORTHWIND TRADERS` verbatim from the document, exactly as its prompt demands.
 
+## Live-run findings (the older 30, full sweep 2026-07-30)
+
+All 30 pre-`claude-agent-sdk` projects were live-run after the re-pointing — not just the
+three spot-checks. **24 passed first time; 6 failed, all for one shared cause.**
+
+11. **The gateway's Anthropic path returns `500 internal_error` on an OpenAI `stop` array.**
+    It does not translate `stop` into Anthropic's `stop_sequences`. Isolated with curl: the
+    identical request passes without `stop` and 500s with it, on any `claude-*` alias; the
+    Ollama path honours `stop` normally. This broke exactly the six text-ReAct projects —
+    UC04 and UC08 across all three approaches — because those are the only ones that send
+    `stop`, and both default to `claude-haiku`. **Every one failed on its first LLM call**,
+    so it was not a subtle degradation; these two use cases could not have run at all since
+    the platform rebuild.
+
+    Fixed in all six by making the stop-cut a client-side guarantee rather than a
+    server-side favour: `model_profile()` gained a `supports_stop` capability (False for
+    `claude-*`) so `stop` is sent only where it works, and `truncate_at_stop()` now cuts the
+    reply at the first `Observation:` regardless. That is the more portable design anyway —
+    `stop` is advisory, and a model that writes its own `Observation:` would otherwise feed
+    itself fabricated tool output. Each project gained a regression test proving a
+    model-supplied observation is discarded, plus one asserting `stop` is withheld from
+    `claude-*`.
+
+    Worth noting for the platform: this is a gateway defect, not a repo defect. The
+    workaround belongs here regardless, but `/v1/chat/completions` → `/v1/messages`
+    translation should map `stop` → `stop_sequences` rather than 500.
+
 ## Status
 - **10/10 use cases × 4 approaches = 40 projects built.**
 - `claude-agent-sdk`: **131 offline unit tests green**. **All 14 integration tests verified live and passing — all 10 use cases.** Two live passes found 8 defects plus 1 test bug; every one is fixed, and the security-relevant ones (F10, F11, F14) are in `docs/security-review.md`.
-- raw-api / langchain / langgraph: unit + integration green as of v0.2.0 — but see Platform drift: their `.env` still points at the retired `:8080`.
+- raw-api / langchain / langgraph: re-pointed at `:8094` and **all 30 live-run 2026-07-30 — 30/30 passing** (18 free-local, 12 cloud). The sweep found one defect (finding 11 above) affecting 6 projects.
+- **Running total: 9 defects found by live runs that mocked tests could not see**, across both the agent-SDK build and the older 30.

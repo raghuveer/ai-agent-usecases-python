@@ -55,7 +55,7 @@ and returns the best `RESEARCH_TOP_K`.
 |---|---|---|
 | `LLM_BASE_URL` | `http://localhost:8080/v1` | OpenAI-compatible gateway |
 | `LLM_GATEWAY_KEY` | placeholder | `Authorization: Bearer` key |
-| `LLM_MODEL` | `claude-haiku-4-5` | model alias (qwen3 → `/no_think` auto-applied) |
+| `LLM_MODEL` | `claude-haiku` | model alias (qwen3 → `/no_think` auto-applied) |
 | `LLM_TEMPERATURE` | `0.0` | sampling temperature |
 | `LLM_MAX_TOKENS` | `400` | max generation tokens |
 | `RESEARCH_TOP_K` | `4` | corpus facts the researcher gathers |
@@ -83,7 +83,7 @@ RUN_INTEGRATION=1 .venv/Scripts/python.exe -m pytest tests/test_integration.py -
 
 ## Model note (UC7-specific)
 
-This use case defaults to **`claude-haiku-4-5`**, not the free local Qwen.
+This use case defaults to **`claude-haiku`**, not the free local Qwen.
 Reason: UC7 needs reliable *role-following* — the writer must draft only from the
 notes, and the reviewer must emit a parseable `APPROVED:` verdict — which the
 free local model could not do reliably. The integration test therefore spends a

@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 
 from fastapi.testclient import TestClient
 
-from app import react, tools
+from app import llm, react, tools
 from app.main import create_app
 from app.settings import Settings
 
@@ -178,3 +178,43 @@ def test_health_and_run_offline():
     assert body["answer"] == "60"
     assert body["stopped_reason"] == "final_answer"
     assert [s["action"] for s in body["steps"]] == ["search", "calculator"]
+
+
+# --------------------------------------------------------------------------- #
+# Stop-sequence handling (the gateway's Anthropic path 500s on `stop`)
+# --------------------------------------------------------------------------- #
+def test_supports_stop_is_false_only_for_claude_models():
+    assert llm.model_profile("qwen-local-coder")["supports_stop"] is True
+    assert llm.model_profile("qwen3:1.7b")["supports_stop"] is True
+    assert llm.model_profile("claude-haiku")["supports_stop"] is False
+
+
+def test_truncate_at_stop_cuts_hallucinated_observation():
+    text = "Thought: compute\nAction: calculator\nObservation: fabricated!"
+    cut = llm.truncate_at_stop(text, ["Observation:"])
+    assert cut == "Thought: compute\nAction: calculator"
+    assert llm.truncate_at_stop("Thought: done  ", ["Observation:"]) == "Thought: done"
+
+
+def test_chat_omits_stop_for_claude_but_still_truncates():
+    """Regression: sending `stop` to claude-* 500s, so the cut happens locally."""
+    client = _fake_openai_client(["Action: calculator\nObservation: fake"])
+    out = llm.chat(
+        client,
+        model="claude-haiku",
+        messages=[{"role": "system", "content": "s"}, {"role": "user", "content": "u"}],
+        stop=["Observation:"],
+    )
+    assert "stop" not in client.chat.completions.create.call_args.kwargs
+    assert out == "Action: calculator"
+
+
+def test_chat_sends_stop_for_models_that_support_it():
+    client = _fake_openai_client(["Action: calculator"])
+    llm.chat(
+        client,
+        model="qwen-local-coder",
+        messages=[{"role": "system", "content": "s"}, {"role": "user", "content": "u"}],
+        stop=["Observation:"],
+    )
+    assert client.chat.completions.create.call_args.kwargs["stop"] == ["Observation:"]

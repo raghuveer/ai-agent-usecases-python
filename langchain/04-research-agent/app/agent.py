@@ -25,7 +25,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import Tool
 
-from .llm import system_prompt
+from .llm import system_prompt, truncate_at_stop
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "corpus"
 DEFAULT_MAX_STEPS = 6
@@ -270,7 +270,9 @@ def run_agent(
         reply = chain.invoke(
             {"question": _desensitize(question), "transcript": transcript}
         )
-        parsed = parse_step(reply)
+        # The endpoint may not honour `stop`, so cut the turn at the first
+        # Observation: here — the loop, not the model, supplies observations.
+        parsed = parse_step(truncate_at_stop(reply))
 
         if parsed.final_answer is not None:
             answer = _REDACTION_RE.sub("Northwind Robotics", parsed.final_answer)

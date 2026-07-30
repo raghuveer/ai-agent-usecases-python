@@ -92,7 +92,7 @@ chain. No Anthropic model is needed.
 
 ## Model note (UC3-specific)
 
-This use case defaults to **`claude-haiku-4-5`**, not the free local Qwen. Reason:
+This use case defaults to **`claude-haiku`**, not the free local Qwen. Reason:
 small local models (`qwen-local-instruct`) are unreliable at emitting strict,
 schema-valid JSON for invoice extraction — in testing they echoed malformed
 output (e.g. stray `<PERSON>` tokens and collapsed objects), which looked like a

@@ -42,7 +42,7 @@ Default per the build spec is the free **`qwen-local-instruct`**. On the live
 loop **Qwen could not reliably drive the text ReAct protocol** — it emitted
 prose instead of `Action: search` / `Action Input:`, used outside knowledge, and
 never reached a `Final Answer` (the loop hit `max_steps`). Per the spec's
-fallback rule this use case switches its default to **`claude-haiku-4-5`** (set
+fallback rule this use case switches its default to **`claude-haiku`** (set
 in `settings.py`, `.env`, `.env.example`), and the integration test is marked
 `@pytest.mark.anthropic` as well as `@pytest.mark.integration`.
 
@@ -61,7 +61,7 @@ in place the agent reliably completes and cites both `returns.md` and
 |---|---|---|
 | `LLM_BASE_URL` | `http://localhost:8080/v1` | OpenAI-compatible gateway |
 | `LLM_GATEWAY_KEY` | placeholder | `Authorization: Bearer` key |
-| `LLM_MODEL` | `claude-haiku-4-5` | model alias (qwen3 → `/no_think` auto-applied) |
+| `LLM_MODEL` | `claude-haiku` | model alias (qwen3 → `/no_think` auto-applied) |
 | `AGENT_MAX_STEPS` | `6` | ReAct step cap |
 | `AGENT_TOP_K` | `3` | snippets per search |
 | `LLM_TEMPERATURE` | `0.0` | sampling temperature (optional) |
@@ -81,3 +81,25 @@ python -m uv pip install --python .venv/Scripts/python.exe -e ".[dev]"
 # Live loop via the gateway (Anthropic; gated):
 RUN_INTEGRATION=1 .venv/Scripts/python.exe -m pytest tests/test_integration.py -q -m integration
 ```
+
+## Gateway note — `stop` sequences (fixed 2026-07-30)
+
+A text ReAct loop must halt the model right after its `Action:` so it cannot
+invent the `Observation:` — the loop supplies real tool output. The obvious way
+is an OpenAI `stop` array, and that is what this project sent.
+
+**The AI Utility Platform gateway returns `500 internal_error` for any request
+carrying `stop` on a `claude-*` alias** — it does not translate `stop` into
+Anthropic's `stop_sequences`. The same request succeeds without `stop`, and the
+Ollama-backed aliases honour `stop` normally. Since this use case defaults to
+`claude-haiku`, every live run failed on its first call.
+
+The fix treats the cut as *our* invariant rather than the server's favour:
+
+- `model_profile()` carries a `supports_stop` capability (False for `claude-*`),
+  so `stop` is sent only to endpoints that accept it.
+- `truncate_at_stop()` cuts the reply at the first `Observation:` either way.
+
+This is the more portable arrangement regardless of the gateway bug: `stop` is
+advisory, several providers ignore it, and a model that writes its own
+`Observation:` would otherwise be feeding itself fabricated tool output.

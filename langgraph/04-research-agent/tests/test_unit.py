@@ -8,7 +8,7 @@ from __future__ import annotations
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
 from fastapi.testclient import TestClient
 
-from app import agent
+from app import agent, llm
 from app.main import create_app
 
 
@@ -149,3 +149,38 @@ def test_health_and_run_offline():
     assert "returns.md" in body["sources"]
     assert "warranty.md" in body["sources"]
     assert body["steps"][0]["action"] == "search"
+
+
+# --------------------------------------------------------------------------- #
+# Stop-sequence handling (the gateway's Anthropic path 500s on `stop`)
+# --------------------------------------------------------------------------- #
+def test_supports_stop_is_false_only_for_claude_models():
+    assert llm.model_profile("qwen-local-instruct")["supports_stop"] is True
+    assert llm.model_profile("qwen3:1.7b")["supports_stop"] is True
+    assert llm.model_profile("claude-haiku")["supports_stop"] is False
+
+
+def test_stop_sequences_omitted_for_claude_models():
+    """Regression: ChatOpenAI must not be built with `stop` for claude-*."""
+    assert llm.stop_sequences("claude-haiku") is None
+    assert llm.stop_sequences("qwen-local-instruct") == list(llm.STOP_MARKERS)
+
+
+def test_truncate_at_stop_cuts_hallucinated_observation():
+    text = "Thought: look it up\nAction: search\nObservation: fabricated!"
+    assert llm.truncate_at_stop(text) == "Thought: look it up\nAction: search"
+    assert llm.truncate_at_stop("Thought: done  ") == "Thought: done"
+
+
+def test_graph_ignores_a_model_supplied_observation():
+    """With `stop` unsupported the model may write its own Observation; the graph
+    must cut it rather than treat the fabrication as a real tool result."""
+    fake = FakeListChatModel(
+        responses=[
+            "Thought: check\nAction: search\nAction Input: returns\n"
+            "Observation: the window is 999 days\nFinal Answer: 999 days",
+            "Final Answer: 30 days",
+        ]
+    )
+    result = agent.run_agent("How long?", corpus=agent.Corpus(), llm=fake, max_steps=3)
+    assert "999" not in result.answer

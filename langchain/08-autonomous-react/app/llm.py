@@ -14,6 +14,8 @@ from langchain_openai import ChatOpenAI
 
 from .settings import Settings, get_settings
 
+STOP_MARKERS = ("Observation:",)
+
 
 def build_llm(settings: Settings | None = None, **kwargs) -> BaseChatModel:
     """Build a ChatOpenAI client against the gateway."""
@@ -33,10 +35,43 @@ def model_profile(model: str) -> dict:
 
     Single place model-family quirks live — extend here to support a new model
     family and nothing else changes.
+
+    ``supports_stop`` is False for ``claude-*``: those aliases route through the
+    gateway's Anthropic surface, which does not translate an OpenAI ``stop``
+    array into Anthropic's ``stop_sequences`` and answers 500 instead.
     """
-    if model.lower().startswith("qwen3"):
-        return {"thinking_prefix": "/no_think\n"}
-    return {"thinking_prefix": ""}
+    m = model.lower()
+    if m.startswith("qwen3"):
+        return {"thinking_prefix": "/no_think\n", "supports_stop": True}
+    if m.startswith("claude"):
+        return {"thinking_prefix": "", "supports_stop": False}
+    return {"thinking_prefix": "", "supports_stop": True}
+
+
+def stop_sequences(llm=None, settings: Settings | None = None) -> list[str] | None:
+    """``STOP_MARKERS`` when the endpoint honours ``stop``, else ``None``.
+
+    The model id comes from the client where it exposes one (a test double may
+    not), otherwise from settings.
+    """
+    model = getattr(llm, "model_name", None) or (settings or get_settings()).llm_model
+    return list(STOP_MARKERS) if model_profile(model)["supports_stop"] else None
+
+
+def truncate_at_stop(text: str, markers: tuple[str, ...] = STOP_MARKERS) -> str:
+    """Cut ``text`` at the earliest stop marker.
+
+    Server-side ``stop`` is an optimisation, not a guarantee: some endpoints
+    ignore it and the gateway's Anthropic path rejects it outright. Enforcing the
+    cut here keeps the loop's invariant -- the model never supplies its own
+    Observation -- whatever the endpoint does.
+    """
+    cut = len(text)
+    for marker in markers:
+        found = text.find(marker)
+        if found != -1:
+            cut = min(cut, found)
+    return text[:cut].strip()
 
 
 def system_prefix(text: str, settings: Settings | None = None) -> str:

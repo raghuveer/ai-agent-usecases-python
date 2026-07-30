@@ -61,7 +61,7 @@ The loop appends `Observation: <tool result>` after each tool call and stops on
 |---|---|---|
 | `LLM_BASE_URL` | `http://localhost:8080/v1` | OpenAI-compatible gateway |
 | `LLM_GATEWAY_KEY` | placeholder | `Authorization: Bearer` key |
-| `LLM_MODEL` | `claude-haiku-4-5` | model alias (qwen3 → `/no_think` auto-applied) |
+| `LLM_MODEL` | `claude-haiku` | model alias (qwen3 → `/no_think` auto-applied) |
 | `LLM_TEMPERATURE` | `0.0` | sampling temperature (0 = deterministic) |
 | `LLM_MAX_TOKENS` | per use case | max tokens for the primary generation |
 | `MAX_STEPS` | `6` | ReAct loop iteration cap |
@@ -89,7 +89,7 @@ RUN_INTEGRATION=1 .venv/Scripts/python.exe -m pytest tests/test_integration.py -
 
 ## Model note (UC8-specific)
 
-This use case defaults to **`claude-haiku-4-5`**, not the free local Qwen.
+This use case defaults to **`claude-haiku`**, not the free local Qwen.
 Reason: UC8 needs a reliable *multi-step* tool chain (search → 30 → calculator →
 60). The free local model (`qwen-local-instruct`, qwen2.5-7B) was unreliable at
 driving the two-tool text-ReAct loop — it garbled the `Action`/`Action Input`
@@ -98,3 +98,25 @@ calculator. This is the documented "Haiku fallback" rule from the build spec
 (mirrors UC3). The integration test therefore spends a small, capped amount of
 Anthropic budget and is marked `anthropic`; unit tests remain fully
 mocked/offline and require no key.
+
+## Gateway note — `stop` sequences (fixed 2026-07-30)
+
+A text ReAct loop must halt the model right after its `Action:` so it cannot
+invent the `Observation:` — the loop supplies real tool output. The obvious way
+is an OpenAI `stop` array, and that is what this project sent.
+
+**The AI Utility Platform gateway returns `500 internal_error` for any request
+carrying `stop` on a `claude-*` alias** — it does not translate `stop` into
+Anthropic's `stop_sequences`. The same request succeeds without `stop`, and the
+Ollama-backed aliases honour `stop` normally. Since this use case defaults to
+`claude-haiku`, every live run failed on its first call.
+
+The fix treats the cut as *our* invariant rather than the server's favour:
+
+- `model_profile()` carries a `supports_stop` capability (False for `claude-*`),
+  so `stop` is sent only to endpoints that accept it.
+- `truncate_at_stop()` cuts the reply at the first `Observation:` either way.
+
+This is the more portable arrangement regardless of the gateway bug: `stop` is
+advisory, several providers ignore it, and a model that writes its own
+`Observation:` would otherwise be feeding itself fabricated tool output.

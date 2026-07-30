@@ -32,7 +32,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
-from .llm import system_prompt
+from .llm import system_prompt, truncate_at_stop
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "corpus"
 DEFAULT_MAX_STEPS = 6
@@ -237,7 +237,11 @@ def build_agent_graph(corpus: Corpus, llm: BaseChatModel):
             ),
         ]
         reply = llm.invoke(messages).content
-        parsed = parse_step(reply if isinstance(reply, str) else str(reply))
+        # The endpoint may not honour `stop`, so cut the turn at the first
+        # Observation: here — the graph, not the model, supplies observations.
+        parsed = parse_step(
+            truncate_at_stop(reply if isinstance(reply, str) else str(reply))
+        )
 
         if parsed.final_answer is not None:
             return {
