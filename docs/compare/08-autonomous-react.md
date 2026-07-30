@@ -9,9 +9,9 @@ Every approach here solves an identical task with identical tools. What differs 
 | Approach | `app/` lines | Core symbol | The trade |
 |---|---:|---|---|
 | [`raw-api`](../../raw-api/08-autonomous-react) | 840 | `app/react.py::run_react` | You write the loop, the parser, and the stop condition. |
-| [`langchain`](../../langchain/08-autonomous-react) | 639 | `app/react.py::run_react` | The framework supplies tools and message types; the loop is still yours. |
-| [`langgraph`](../../langgraph/08-autonomous-react) | 698 | `app/react.py::build_react_graph` | The loop becomes a graph: nodes, a conditional edge, and a cycle. |
-| [`claude-agent-sdk`](../../claude-agent-sdk/08-autonomous-react) | 538 | `app/react_agent.py::run_react` | There is no loop in the repo. The SDK owns it. |
+| [`langchain`](../../langchain/08-autonomous-react) | 797 | `app/react.py::run_react` | The framework supplies tools and message types; the loop is still yours. |
+| [`langgraph`](../../langgraph/08-autonomous-react) | 836 | `app/react.py::build_react_graph` | The loop becomes a graph: nodes, a conditional edge, and a cycle. |
+| [`claude-agent-sdk`](../../claude-agent-sdk/08-autonomous-react) | 636 | `app/react_agent.py::run_react` | There is no loop in the repo. The SDK owns it. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
 
@@ -58,52 +58,17 @@ def run_react(
     tools: list[Tool],
     max_steps: int = 6,
 ) -> ReactResult:
-    """Run the LangChain-tool ReAct loop until Final Answer or max_steps."""
-    messages = [
-        SystemMessage(content=build_system_prompt(tools)),
-        HumanMessage(content=f"Task: {task}\n\nBegin."),
-    ]
-    steps: list[Step] = []
-    nudged = False
+    """Run the LangChain-tool ReAct loop until Final Answer or max_steps.
 
-    for _ in range(max_steps):
-        # Stop after the model's Action so it can't hallucinate the Observation.
-        # `stop` is sent only where the endpoint honours it, so the cut is also
-        # applied locally — before the turn enters the transcript.
-        reply = llm.invoke(messages, stop=stop_sequences(llm))
-        text = strip_thinking(
-            reply.content if isinstance(reply, AIMessage) else str(reply)
-        )
-        text = truncate_at_stop(text)
-        messages.append(AIMessage(content=text))
-
-        final = parse_final_answer(text)
-        if final is not None:
-            return ReactResult(answer=final, steps=steps, stopped_reason="final_answer")
-
-        parsed = parse_action(text)
-        if parsed is None:
-            if not nudged:
-                nudged = True
-                messages.append(HumanMessage(content=(
-                    "Please respond using the required format: either an Action "
-                    "with Action Input, or a Final Answer."
-                )))
-                continue
-            return ReactResult(answer=text.strip(), steps=steps, stopped_reason="max_steps")
-
-        action, action_input = parsed
-        observation = run_tool(tools, action, action_input)
-        steps.append(Step(
-            thought=parse_thought(text),
-            action=action,
-            action_input=action_input,
-            observation=observation,
-        ))
-        messages.append(HumanMessage(content=f"Observation: {observation}"))
-
-    last_obs = steps[-1].observation if steps else ""
-    return ReactResult(answer=last_obs, steps=steps, stopped_reason="max_steps")
+    Drains :func:`iter_react`, so the blocking and streaming paths cannot drift
+    apart — there is one loop, exposed two ways.
+    """
+    result: ReactResult | None = None
+    for event in iter_react(task, llm=llm, tools=tools, max_steps=max_steps):
+        if event["type"] == "final":
+            result = event["result"]
+    assert result is not None, "iter_react always ends with a final event"
+    return result
 ```
 
 ### langgraph — `app/react.py`

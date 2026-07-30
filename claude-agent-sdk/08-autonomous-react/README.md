@@ -98,6 +98,17 @@ cost, because an OpenAI-compatible endpoint does not price the call.
 from what the agent actually did. `hit_turn_limit` is reported rather than
 hidden: a truncated run should be visible, not silently returned as an answer.
 
+## Streaming (`POST /run/stream`) — turns, not tokens
+
+The SDK yields whole `AssistantMessage`s, so this emits a `turn` frame when a
+turn completes and a `step` frame per tool call. **There is no `token` frame:**
+the harness owns the model call and exposes no deltas.
+
+Measured against the other three: first frame at **5.49s**, versus **0.36s** for
+langgraph — about fifteen times longer before a user sees anything. The same
+asymmetry the trace records, showing up as latency rather than missing fields.
+See [`docs/streaming.md`](../../docs/streaming.md).
+
 ## Env vars (`.env.example`)
 
 | Var | Default | Meaning |

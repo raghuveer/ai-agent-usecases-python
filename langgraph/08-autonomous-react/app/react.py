@@ -30,14 +30,20 @@ inconsistent on this gateway). The LLM is injected, so unit tests pass a
 from __future__ import annotations
 
 import re
-from typing import Annotated, Optional, TypedDict
+from typing import Annotated, Iterator, Optional, TypedDict
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 
-from .llm import stop_sequences, strip_thinking, system_prefix, truncate_at_stop
+from .llm import (
+    ThinkFilter,
+    stop_sequences,
+    strip_thinking,
+    system_prefix,
+    truncate_at_stop,
+)
 from .tools import TOOLS, UnsafeExpression
 
 ToolRegistry = dict  # name -> (callable, description)
@@ -220,6 +226,25 @@ def build_react_graph(llm: BaseChatModel, tools: ToolRegistry | None = None):
     return graph.compile()
 
 
+def _initial_state(task: str, tools: ToolRegistry, max_steps: int) -> ReactState:
+    """The graph's starting state — shared by the blocking and streaming paths."""
+    return {
+        "task": task,
+        "max_steps": max_steps,
+        "messages": [
+            SystemMessage(content=build_system_prompt(tools)),
+            HumanMessage(content=f"Task: {task}\n\nBegin."),
+        ],
+        "steps": [],
+        "answer": None,
+        "stopped_reason": None,
+        "pending_action": None,
+        "pending_input": None,
+        "pending_thought": None,
+        "last_observation": None,
+    }
+
+
 def run_react(
     task: str,
     *,
@@ -238,26 +263,74 @@ def run_react(
     """
     tools = tools if tools is not None else TOOLS
     graph = build_react_graph(llm, tools)
-    init: ReactState = {
-        "task": task,
-        "max_steps": max_steps,
-        "messages": [
-            SystemMessage(content=build_system_prompt(tools)),
-            HumanMessage(content=f"Task: {task}\n\nBegin."),
-        ],
-        "steps": [],
-        "answer": None,
-        "stopped_reason": None,
-        "pending_action": None,
-        "pending_input": None,
-        "pending_thought": None,
-        "last_observation": None,
-    }
+    init = _initial_state(task, tools, max_steps)
     # recursion_limit must allow reason+act+observe per step (3 nodes/cycle).
     config: dict = {"recursion_limit": max_steps * 3 + 5}
     if callbacks:
         config["callbacks"] = callbacks
     out = graph.invoke(init, config=config)
+    return _normalise(out)
+
+
+def iter_react(
+    task: str,
+    *,
+    llm: BaseChatModel,
+    tools: ToolRegistry | None = None,
+    max_steps: int = 6,
+) -> Iterator[dict]:
+    """The graph as a stream of events. See docs/streaming.md.
+
+    This is where langgraph differs from the other three. They stream *tokens*;
+    a graph can also stream **node transitions**, because the framework knows
+    what a node is. ``stream_mode=["messages", "updates"]`` gives both at once:
+
+    * ``messages`` → token chunks, tagged with the node that produced them
+    * ``updates``  → each node's output as it completes
+
+    So the event stream carries a ``node`` frame the others cannot produce —
+    the live counterpart to ``graph_path`` in the trace.
+    """
+    tools = tools if tools is not None else TOOLS
+    graph = build_react_graph(llm, tools)
+    init = _initial_state(task, tools, max_steps)
+
+    think = ThinkFilter()
+    seen_steps = 0
+    final_state: dict = {}
+
+    for mode, chunk in graph.stream(
+        init,
+        config={"recursion_limit": max_steps * 3 + 5},
+        stream_mode=["messages", "updates"],
+    ):
+        if mode == "messages":
+            message, _meta = chunk
+            raw = getattr(message, "content", "") or ""
+            visible = think.feed(raw if isinstance(raw, str) else str(raw))
+            if visible:
+                yield {"type": "token", "text": visible}
+            continue
+
+        # mode == "updates": {node_name: state_delta}
+        for node, delta in (chunk or {}).items():
+            yield {"type": "node", "name": node}
+            final_state.update(delta or {})
+            steps = final_state.get("steps") or []
+            while len(steps) > seen_steps:
+                step = steps[seen_steps]
+                seen_steps += 1
+                yield {"type": "step", "step": step}
+
+    tail = think.flush()
+    if tail:
+        yield {"type": "token", "text": tail}
+
+    yield {"type": "final", "result": _normalise(final_state)}
+
+
+def _normalise(out: dict) -> dict:
+    """Graph state -> the {"answer", "steps", "stopped_reason"} contract."""
 
     steps = out.get("steps", [])
     stopped_reason = out.get("stopped_reason")

@@ -12,16 +12,18 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
+import json
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.tools import Tool
 from pydantic import BaseModel, Field
 
 from . import trace as trace_mod
 from .llm import build_llm
-from .react import run_react
+from .react import iter_react, run_react
 from .settings import get_settings
 from .tools import build_tools
 
@@ -63,9 +65,57 @@ app.state.llm = None
 app.state.tools = build_tools()
 
 
+def _sse(event: dict) -> str:
+    """Format one loop event as a server-sent event frame. See docs/streaming.md."""
+    payload = dict(event)
+    name = payload.pop("type")
+    if "step" in payload:
+        payload["step"] = vars(payload["step"])
+    if "result" in payload:
+        result = payload.pop("result")
+        payload = {
+            "answer": result.answer,
+            "stopped_reason": result.stopped_reason,
+            "steps": [vars(s) for s in result.steps],
+        }
+    return f"event: {name}\ndata: {json.dumps(payload)}\n\n"
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "approach": APPROACH, "usecase": USECASE}
+
+
+@app.post("/run/stream")
+def run_stream(req: RunRequest) -> StreamingResponse:
+    """Server-sent events: watch the loop reason, act and observe live.
+
+    The langchain difference is one line inside the loop: ``llm.stream()``
+    instead of ``llm.invoke()``. The framework hands you an iterator of
+    ``AIMessageChunk``s — no SSE parsing, no delta bookkeeping. Compare with
+    `raw-api/08`, which does that itself.
+    """
+    settings = get_settings()
+    max_steps = req.max_steps if req.max_steps is not None else settings.max_steps
+
+    def frames():
+        try:
+            for event in iter_react(
+                req.task,
+                llm=app.state.llm,
+                tools=app.state.tools,
+                max_steps=max_steps,
+                stream=True,
+            ):
+                yield _sse(event)
+        except Exception as exc:  # noqa: BLE001 - a silent stream looks finished
+            yield _sse({"type": "error", "message": str(exc)})
+
+    return StreamingResponse(
+        frames(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.post("/run", response_model=RunResponse)

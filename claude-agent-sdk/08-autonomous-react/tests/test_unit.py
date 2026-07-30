@@ -10,6 +10,8 @@ it evaluates model-authored text.
 """
 from __future__ import annotations
 
+import importlib
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -202,3 +204,40 @@ def test_capped_run_is_traced_as_capped():
     ).json()["trace"]
     assert trace["outcome"]["status"] == "capped"
     assert trace["outcome"]["stop_reason"] == "max_turns"
+
+
+# --------------------------------------------------------------------------- #
+# Streaming (SSE) — turns, not tokens. See docs/streaming.md
+# --------------------------------------------------------------------------- #
+@pytest.mark.anyio
+async def test_iter_events_yields_turns_and_steps_but_never_tokens():
+    """The asymmetry, asserted: the SDK exposes no deltas, so there is no
+    `token` frame to emit. Writing no loop costs you the view inside it."""
+    from claude_agent_sdk import AssistantMessage, TextBlock, ToolUseBlock
+
+    from app import agent as agent_mod
+
+    async def fake_query(**_kwargs):
+        yield AssistantMessage(
+            content=[TextBlock(text="Looking that up.")], model="m"
+        )
+        yield AssistantMessage(
+            content=[ToolUseBlock(id="t1", name="mcp__metrics__lookup_metric",
+                                  input={"name": "revenue"})],
+            model="m",
+        )
+
+    agent_mod.query = fake_query
+    try:
+        events = [
+            e async for e in agent_mod.iter_events(
+                "q", agent_mod.ClaudeAgentOptions()
+            )
+        ]
+    finally:
+        importlib.reload(agent_mod)
+
+    kinds = [e["type"] for e in events]
+    assert "token" not in kinds, "the SDK cannot stream tokens"
+    assert kinds == ["turn", "step", "final"]
+    assert events[1]["step"]["tool"] == "lookup_metric"

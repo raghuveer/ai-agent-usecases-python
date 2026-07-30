@@ -11,6 +11,8 @@ tools, exercise the unsafe-calculator rejection, and cover both
 """
 from __future__ import annotations
 
+import json
+
 from fastapi.testclient import TestClient
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
 
@@ -227,3 +229,53 @@ def test_strip_thinking_removes_qwen3_think_blocks():
     assert strip_thinking("  30 days.  ") == "30 days."
     # Chain-of-thought must never survive into a response.
     assert "reasoning" not in strip_thinking("<think>reasoning</think>ok")
+
+
+# --------------------------------------------------------------------------- #
+# Streaming (SSE). See docs/streaming.md
+# --------------------------------------------------------------------------- #
+def test_think_filter_drops_reasoning_split_across_chunks():
+    from app.llm import ThinkFilter
+
+    f = ThinkFilter()
+    out = "".join(f.feed(c) for c in ["<th", "ink>secret", "</thi", "nk>Answer."])
+    assert out + f.flush() == "Answer."
+
+
+def test_stream_emits_node_frames_only_this_approach_can():
+    """A graph knows what a node is, so it can stream the route as it happens —
+    the live counterpart to `graph_path` in the trace."""
+    client = make_client([
+        "Thought: look\nAction: search\nArguments: return window",
+        "Thought: done\nFinal Answer: 30 days",
+    ])
+    with client.stream("POST", "/run/stream", json={"task": "x"}) as resp:
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/event-stream")
+        body = "".join(resp.iter_text())
+
+    assert "event: node" in body, "the graph must report its route"
+    assert "event: final" in body
+    nodes = [
+        json.loads(line[6:])["name"]
+        for line in body.splitlines()
+        if line.startswith("data: ") and '"name"' in line
+    ]
+    assert nodes[:3] == ["reason", "act", "observe"]
+    assert body.endswith("\n\n")
+
+
+def test_stream_and_run_reach_the_same_answer():
+    script = [
+        "Thought: look\nAction: search\nArguments: return window",
+        "Thought: done\nFinal Answer: 30 days",
+    ]
+    blocking = make_client(list(script)).post("/run", json={"task": "x"}).json()
+    with make_client(list(script)).stream(
+        "POST", "/run/stream", json={"task": "x"}
+    ) as resp:
+        body = "".join(resp.iter_text())
+    final = json.loads(body.rsplit("data: ", 1)[1].strip())
+
+    assert blocking["answer"] == final["answer"]
+    assert blocking["stopped_reason"] == final["stopped_reason"]

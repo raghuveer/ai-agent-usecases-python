@@ -43,6 +43,36 @@ A stream that dies without a frame is indistinguishable from one that finished,
 so failures are events too. Frames end with a blank line — omit it and the client
 waits forever for a frame that already arrived.
 
+## All four, measured
+
+Same task, same machine, real `uvicorn` processes; the three OpenAI-surface
+approaches against local `qwen3:1.7b`, the Agent SDK against `claude-haiku`
+(the gateway cannot stream — see below).
+
+| | raw-api | langchain | langgraph | claude-agent-sdk |
+|---|---|---|---|---|
+| `token` frames | 53 | 52 | 55 | **0 — cannot** |
+| `node` frames | — | — | **4** | — |
+| Other frames | thought, step, final | thought, step, final | step, final | turn ×3, step ×2, final |
+| **Time to first frame** | 0.54s | 0.75s | **0.36s** | **5.49s** |
+| Total spread | 4.13s | 3.60s | 3.75s | 3.47s |
+| How you stream | `stream=True`, parse deltas yourself | `llm.stream()` → `AIMessageChunk` | `stream_mode=["messages","updates"]` | `async for` over SDK messages |
+
+Two results worth sitting with:
+
+**Only langgraph can stream a route.** `event: node` frames arrive live —
+`reason → act → observe → reason` — because the framework knows what a node is.
+That is the running counterpart to `graph_path` in the trace, and the other three
+have nothing to report it with.
+
+**The Agent SDK cannot stream tokens at all, and you can feel it.** It yields
+whole `AssistantMessage`s, so the first frame lands at **5.49s** against
+**0.36s** for langgraph — roughly fifteen times longer before a user sees
+anything. The harness owns the model call and exposes no deltas. This is the same
+asymmetry the trace found (no per-call messages, no token counts), showing up
+here as latency instead of missing fields: **writing no loop costs you the view
+inside it.**
+
 ## Three things streaming forces you to confront
 
 **1. Thinking tags arrive split across chunks.** qwen3 emits `<think>…</think>`

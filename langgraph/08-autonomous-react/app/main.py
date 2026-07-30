@@ -11,10 +11,12 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
+import json
 import time
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel, Field
 
@@ -26,6 +28,15 @@ from .settings import get_settings
 
 APPROACH = "langgraph"
 USECASE = "08-autonomous-react"
+
+
+def _sse(event: dict) -> str:
+    """Format one graph event as a server-sent event frame. See docs/streaming.md."""
+    payload = dict(event)
+    name = payload.pop("type")
+    if "result" in payload:
+        payload = payload.pop("result")
+    return f"event: {name}\ndata: {json.dumps(payload)}\n\n"
 
 
 def _traced_tools(tools: dict, tracer: trace_mod.Tracer) -> dict:
@@ -90,6 +101,33 @@ def create_app(llm: BaseChatModel | None = None) -> FastAPI:
     @app.get("/health")
     def health() -> dict:
         return {"status": "ok", "approach": APPROACH, "usecase": USECASE}
+
+    @app.post("/run/stream")
+    def run_stream(req: RunRequest) -> StreamingResponse:
+        """Server-sent events — including `node` frames the others cannot emit.
+
+        The other three approaches stream tokens. A graph can also stream
+        **node transitions**, because the framework knows what a node is:
+        ``stream_mode=["messages", "updates"]`` gives token chunks *and* each
+        node's output as it completes. That is the live counterpart to
+        `graph_path` in the trace. See docs/streaming.md.
+        """
+        max_steps = req.max_steps if req.max_steps is not None else settings.max_steps
+
+        def frames():
+            try:
+                for event in react_mod.iter_react(
+                    req.task, llm=app.state.llm, max_steps=max_steps
+                ):
+                    yield _sse(event)
+            except Exception as exc:  # noqa: BLE001 - a silent stream looks finished
+                yield _sse({"type": "error", "message": str(exc)})
+
+        return StreamingResponse(
+            frames(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     @app.post("/run", response_model=RunResponse)
     def run(req: RunRequest, trace: bool = False) -> RunResponse:

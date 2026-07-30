@@ -10,6 +10,8 @@ outcomes.
 """
 from __future__ import annotations
 
+import json
+
 from fastapi.testclient import TestClient
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
 
@@ -231,3 +233,52 @@ def test_strip_thinking_removes_qwen3_think_blocks():
     assert strip_thinking("  30 days.  ") == "30 days."
     # Chain-of-thought must never survive into a response.
     assert "reasoning" not in strip_thinking("<think>reasoning</think>ok")
+
+
+# --------------------------------------------------------------------------- #
+# Streaming (SSE). See docs/streaming.md
+# --------------------------------------------------------------------------- #
+def test_think_filter_drops_reasoning_split_across_chunks():
+    from app.llm import ThinkFilter
+
+    f = ThinkFilter()
+    out = "".join(f.feed(c) for c in ["<th", "ink>secret", "</thi", "nk>Answer."])
+    assert out + f.flush() == "Answer."
+
+
+def test_stream_endpoint_emits_sse_frames():
+    """`llm.stream()` is the whole difference from raw-api: the framework
+    hands you an iterator instead of you parsing deltas."""
+    app.state.llm = FakeListChatModel(responses=[
+        "Thought: look\nAction: search\nArguments: return window",
+        "Thought: done\nFinal Answer: 30 days",
+    ])
+    with TestClient(app).stream(
+        "POST", "/run/stream", json={"task": "return window?"}
+    ) as resp:
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/event-stream")
+        body = "".join(resp.iter_text())
+
+    assert "event: token" in body
+    assert "event: step" in body
+    assert "event: final" in body
+    assert body.endswith("\n\n")
+
+
+def test_run_and_stream_reach_the_same_answer():
+    """run_react drains iter_react, so the two paths must not diverge."""
+    responses = [
+        "Thought: look\nAction: search\nArguments: return window",
+        "Thought: done\nFinal Answer: 30 days",
+    ]
+    app.state.llm = FakeListChatModel(responses=list(responses))
+    blocking = TestClient(app).post("/run", json={"task": "x"}).json()
+
+    app.state.llm = FakeListChatModel(responses=list(responses))
+    with TestClient(app).stream("POST", "/run/stream", json={"task": "x"}) as resp:
+        body = "".join(resp.iter_text())
+    final = json.loads(body.rsplit("data: ", 1)[1].strip())
+
+    assert blocking["answer"] == final["answer"]
+    assert blocking["stopped_reason"] == final["stopped_reason"]

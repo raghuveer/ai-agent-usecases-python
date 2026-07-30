@@ -88,6 +88,21 @@ callbacks=[...])`, which forwards them into `graph.invoke(config=...)`.
 Token usage is identical to `raw-api/08` and `langchain/08` (3,469 / 193): the
 graph changes the control flow, not the payload.
 
+## Streaming (`POST /run/stream`)
+
+Watch the loop work instead of waiting for it: `token`, `node`, `step`,
+`final` as server-sent events. Contract and the four-way measured comparison:
+[`docs/streaming.md`](../../docs/streaming.md).
+
+```bash
+curl -N -X POST localhost:8000/run/stream -H 'content-type: application/json' -d '{"task":"return window doubled?"}'
+```
+
+> **The gateway cannot stream.** `stream: true` returns `500` on its Anthropic
+> path and an empty body on its OpenAI path, so point `LLM_BASE_URL` straight at
+> Ollama (or a provider) to see this work. `curl -N` matters too — without it
+> your client buffers and everything appears at once.
+
 ## Env vars (`.env.example`)
 
 | Var | Default | Meaning |

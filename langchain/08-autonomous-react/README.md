@@ -90,6 +90,21 @@ handler maps them to the OpenTelemetry/OpenAI names (`user`/`assistant`).
 Otherwise a langchain trace would not line up field-for-field with a raw-api one,
 and the comparison would quietly break.
 
+## Streaming (`POST /run/stream`)
+
+Watch the loop work instead of waiting for it: `token`, `thought`/`node`, `step`,
+`final` as server-sent events. Contract and the four-way measured comparison:
+[`docs/streaming.md`](../../docs/streaming.md).
+
+```bash
+curl -N -X POST localhost:8000/run/stream -H 'content-type: application/json' -d '{"task":"return window doubled?"}'
+```
+
+> **The gateway cannot stream.** `stream: true` returns `500` on its Anthropic
+> path and an empty body on its OpenAI path, so point `LLM_BASE_URL` straight at
+> Ollama (or a provider) to see this work. `curl -N` matters too — without it
+> your client buffers and everything appears at once.
+
 ## Env vars (`.env.example`)
 
 | Var | Default | Meaning |

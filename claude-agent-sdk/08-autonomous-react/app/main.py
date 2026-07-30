@@ -5,15 +5,23 @@
 """FastAPI app for UC08 autonomous-react (claude-agent-sdk approach) — the showcase."""
 from __future__ import annotations
 
+import json
 import time
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from . import trace as trace_mod
-from .agent import Runner
-from .react_agent import METRICS, run_react
+from .agent import Runner, build_options, iter_events
+from .react_agent import (
+    METRICS,
+    REACT_TOOLS,
+    SYSTEM_PROMPT,
+    build_metrics_server,
+    run_react,
+)
 from .settings import get_settings
 
 APPROACH = "claude-agent-sdk"
@@ -44,6 +52,21 @@ class RunResponse(BaseModel):
     trace: dict[str, Any] | None = None
 
 
+def _sse(event: dict) -> str:
+    """Format one loop event as a server-sent event frame. See docs/streaming.md."""
+    payload = dict(event)
+    name = payload.pop("type")
+    if "result" in payload:
+        result = payload.pop("result")
+        payload = {
+            "answer": result.text,
+            "stopped_reason": result.stop_reason or "final_answer",
+            "num_turns": result.num_turns,
+            "cost_usd": result.cost_usd,
+        }
+    return f"event: {name}\ndata: {json.dumps(payload)}\n\n"
+
+
 def create_app(runner: Runner | None = None) -> FastAPI:
     settings = get_settings()
     app = FastAPI(title="claude-agent-sdk 08-autonomous-react")
@@ -59,6 +82,37 @@ def create_app(runner: Runner | None = None) -> FastAPI:
     def metrics() -> dict:
         """The fixed warehouse the agent must query through tools."""
         return METRICS
+
+    @app.post("/run/stream")
+    async def run_stream(req: RunRequest) -> StreamingResponse:
+        """Server-sent events — turns, not tokens.
+
+        The SDK yields whole ``AssistantMessage``s, so this emits a `turn` frame
+        when a turn completes and a `step` frame when a tool is called. There is
+        no `token` frame: the harness owns the model call and exposes no deltas.
+        The same asymmetry the trace records. See docs/streaming.md.
+        """
+        settings = app.state.settings
+
+        async def frames():
+            try:
+                options = build_options(
+                    settings,
+                    system_prompt=SYSTEM_PROMPT,
+                    allowed_tools=REACT_TOOLS,
+                    mcp_servers={"metrics": build_metrics_server()},
+                    max_turns=max(settings.agent_max_turns, 8),
+                )
+                async for event in iter_events(req.question, options):
+                    yield _sse(event)
+            except Exception as exc:  # noqa: BLE001 - a silent stream looks finished
+                yield _sse({"type": "error", "message": str(exc)})
+
+        return StreamingResponse(
+            frames(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     @app.post("/run", response_model=RunResponse)
     async def run(req: RunRequest, trace: bool = False) -> RunResponse:

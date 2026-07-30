@@ -28,12 +28,19 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from typing import Iterator
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import Tool
 
-from .llm import stop_sequences, strip_thinking, system_prefix, truncate_at_stop
+from .llm import (
+    ThinkFilter,
+    stop_sequences,
+    strip_thinking,
+    system_prefix,
+    truncate_at_stop,
+)
 
 
 @dataclass
@@ -130,7 +137,34 @@ def run_react(
     tools: list[Tool],
     max_steps: int = 6,
 ) -> ReactResult:
-    """Run the LangChain-tool ReAct loop until Final Answer or max_steps."""
+    """Run the LangChain-tool ReAct loop until Final Answer or max_steps.
+
+    Drains :func:`iter_react`, so the blocking and streaming paths cannot drift
+    apart — there is one loop, exposed two ways.
+    """
+    result: ReactResult | None = None
+    for event in iter_react(task, llm=llm, tools=tools, max_steps=max_steps):
+        if event["type"] == "final":
+            result = event["result"]
+    assert result is not None, "iter_react always ends with a final event"
+    return result
+
+
+def iter_react(
+    task: str,
+    *,
+    llm: BaseChatModel,
+    tools: list[Tool],
+    max_steps: int = 6,
+    stream: bool = False,
+) -> Iterator[dict]:
+    """The ReAct loop as a stream of events. See docs/streaming.md.
+
+    With ``stream=True`` the model is driven by ``llm.stream()`` — LangChain's
+    own incremental API, which yields ``AIMessageChunk``s. That is the whole
+    difference from the raw-api version: no SSE parsing, no delta bookkeeping,
+    just an iterator the framework hands you.
+    """
     messages = [
         SystemMessage(content=build_system_prompt(tools)),
         HumanMessage(content=f"Task: {task}\n\nBegin."),
@@ -142,16 +176,41 @@ def run_react(
         # Stop after the model's Action so it can't hallucinate the Observation.
         # `stop` is sent only where the endpoint honours it, so the cut is also
         # applied locally — before the turn enters the transcript.
-        reply = llm.invoke(messages, stop=stop_sequences(llm))
-        text = strip_thinking(
-            reply.content if isinstance(reply, AIMessage) else str(reply)
-        )
-        text = truncate_at_stop(text)
+        if stream:
+            think = ThinkFilter()
+            pieces: list[str] = []
+            for chunk in llm.stream(messages, stop=stop_sequences(llm)):
+                raw = chunk.content if hasattr(chunk, "content") else str(chunk)
+                visible = think.feed(raw if isinstance(raw, str) else str(raw))
+                if visible:
+                    pieces.append(visible)
+                    yield {"type": "token", "text": visible}
+            tail = think.flush()
+            if tail:
+                pieces.append(tail)
+                yield {"type": "token", "text": tail}
+            text = truncate_at_stop("".join(pieces).strip())
+        else:
+            reply = llm.invoke(messages, stop=stop_sequences(llm))
+            text = strip_thinking(
+                reply.content if isinstance(reply, AIMessage) else str(reply)
+            )
+            text = truncate_at_stop(text)
         messages.append(AIMessage(content=text))
+
+        thought = parse_thought(text)
+        if thought:
+            yield {"type": "thought", "text": thought}
 
         final = parse_final_answer(text)
         if final is not None:
-            return ReactResult(answer=final, steps=steps, stopped_reason="final_answer")
+            yield {
+                "type": "final",
+                "result": ReactResult(
+                    answer=final, steps=steps, stopped_reason="final_answer"
+                ),
+            }
+            return
 
         parsed = parse_action(text)
         if parsed is None:
@@ -162,17 +221,30 @@ def run_react(
                     "with Action Input, or a Final Answer."
                 )))
                 continue
-            return ReactResult(answer=text.strip(), steps=steps, stopped_reason="max_steps")
+            yield {
+                "type": "final",
+                "result": ReactResult(
+                    answer=text.strip(), steps=steps, stopped_reason="max_steps"
+                ),
+            }
+            return
 
         action, action_input = parsed
         observation = run_tool(tools, action, action_input)
-        steps.append(Step(
-            thought=parse_thought(text),
+        step = Step(
+            thought=thought,
             action=action,
             action_input=action_input,
             observation=observation,
-        ))
+        )
+        steps.append(step)
+        yield {"type": "step", "step": step}
         messages.append(HumanMessage(content=f"Observation: {observation}"))
 
     last_obs = steps[-1].observation if steps else ""
-    return ReactResult(answer=last_obs, steps=steps, stopped_reason="max_steps")
+    yield {
+        "type": "final",
+        "result": ReactResult(
+            answer=last_obs, steps=steps, stopped_reason="max_steps"
+        ),
+    }
