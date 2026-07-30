@@ -24,7 +24,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, ValidationError
 
-from .llm import model_profile
+from .llm import model_profile, strip_thinking
 from .settings import get_settings
 
 
@@ -121,7 +121,7 @@ def build_chain(llm: BaseChatModel, model_name: str):
     prompt = ChatPromptTemplate.from_messages(
         [("system", _system_prompt(model_name)), ("human", USER_PROMPT)]
     )
-    return prompt | llm | StrOutputParser()
+    return prompt | llm | StrOutputParser() | strip_thinking
 
 
 def build_native_chain(llm: BaseChatModel, model_name: str):

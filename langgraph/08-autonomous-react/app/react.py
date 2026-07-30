@@ -37,7 +37,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 
-from .llm import stop_sequences, system_prefix, truncate_at_stop
+from .llm import stop_sequences, strip_thinking, system_prefix, truncate_at_stop
 from .tools import TOOLS, UnsafeExpression
 
 ToolRegistry = dict  # name -> (callable, description)
@@ -143,7 +143,9 @@ def build_react_graph(llm: BaseChatModel, tools: ToolRegistry | None = None):
         # `stop` is sent only where the endpoint honours it, so the cut is also
         # applied locally — before the turn enters the message history.
         reply = llm.invoke(state["messages"], stop=stop_sequences(llm))
-        text = reply.content if isinstance(reply, AIMessage) else str(reply)
+        text = strip_thinking(
+            reply.content if isinstance(reply, AIMessage) else str(reply)
+        )
         text = truncate_at_stop(text)
 
         final = parse_final_answer(text)

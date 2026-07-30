@@ -23,7 +23,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
-from .llm import system_prompt
+from .llm import strip_thinking, system_prompt
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 SEED_PATH = DATA_DIR / "seed.sql"
@@ -156,7 +156,7 @@ def build_sql_chain(llm: BaseChatModel, model_name: str):
     prompt = ChatPromptTemplate.from_messages(
         [("system", system_prompt(SYSTEM_PROMPT, model_name)), ("human", USER_PROMPT)]
     )
-    return prompt | llm | StrOutputParser()
+    return prompt | llm | StrOutputParser() | strip_thinking
 
 
 def summarise(question: str, sql: str, rows: list[dict]) -> str:

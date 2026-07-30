@@ -27,7 +27,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
-from .llm import system_prompt
+from .llm import strip_thinking, system_prompt
 from .settings import Settings, get_settings
 
 SYSTEM_INSTRUCTION = (
@@ -147,7 +147,7 @@ def build_codegen_graph(
             HumanMessage(content=prompt),
         ]
         result = llm.invoke(messages)
-        raw = result.content
+        raw = strip_thinking(result.content)
         return {
             "raw": raw,
             "code": extract_code(raw),

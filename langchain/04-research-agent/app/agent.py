@@ -25,7 +25,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import Tool
 
-from .llm import system_prompt, truncate_at_stop
+from .llm import strip_thinking, system_prompt, truncate_at_stop
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "corpus"
 DEFAULT_MAX_STEPS = 6
@@ -246,7 +246,7 @@ def build_turn_chain(llm: BaseChatModel):
             ),
         ]
     )
-    return prompt | llm | StrOutputParser()
+    return prompt | llm | StrOutputParser() | strip_thinking
 
 
 def run_agent(

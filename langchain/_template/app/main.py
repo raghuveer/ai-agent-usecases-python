@@ -20,7 +20,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
 
-from .llm import build_llm, model_profile
+from .llm import build_llm, model_profile, strip_thinking
 from .settings import get_settings
 
 APPROACH = "langchain"
@@ -72,4 +72,4 @@ def run(req: RunRequest) -> RunResponse:
         HumanMessage(content=req.question),
     ]
     result = llm.invoke(messages)
-    return RunResponse(answer=result.content, sources=[])
+    return RunResponse(answer=strip_thinking(result.content), sources=[])

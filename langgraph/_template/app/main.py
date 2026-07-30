@@ -18,7 +18,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel
 
-from .llm import build_llm, system_prompt
+from .llm import build_llm, strip_thinking, system_prompt
 
 APPROACH = "langgraph"
 USECASE = "_template"
@@ -52,7 +52,10 @@ def build_graph(llm: BaseChatModel):
             HumanMessage(content=state["question"]),
         ]
         result = llm.invoke(messages)
-        return {"question": state["question"], "answer": result.content}
+        return {
+            "question": state["question"],
+            "answer": strip_thinking(result.content),
+        }
 
     graph = StateGraph(GraphState)
     graph.add_node("echo", echo)

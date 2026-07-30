@@ -32,7 +32,7 @@ from langchain_core.retrievers import BaseRetriever
 from langchain_core.runnables import RunnablePassthrough
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from .llm import model_profile
+from .llm import model_profile, strip_thinking
 from .settings import Settings, get_settings
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -103,7 +103,7 @@ def build_chain(retriever: BaseRetriever, llm: BaseChatModel, model_name: str):
         }
         | prompt
         | llm
-        | StrOutputParser()
+        | StrOutputParser() | strip_thinking
     )
 
 

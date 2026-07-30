@@ -35,7 +35,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
-from .llm import system_prompt
+from .llm import strip_thinking, system_prompt
 from .settings import Settings, get_settings
 
 Intent = Literal["billing", "technical", "general"]
@@ -169,7 +169,7 @@ def build_triage_graph(llm: BaseChatModel, settings: Settings | None = None):
             SystemMessage(content=system_prompt(CLASSIFIER_SYSTEM, settings)),
             HumanMessage(content=user),
         ]
-        raw = llm.invoke(messages).content
+        raw = strip_thinking(llm.invoke(messages).content)
         intent, confidence = parse_classification(raw)
         return {"intent": intent, "confidence": confidence}
 
@@ -181,7 +181,7 @@ def build_triage_graph(llm: BaseChatModel, settings: Settings | None = None):
                     content=state["history"] + f"Customer message: {state['message']}"
                 ),
             ]
-            return {"response": llm.invoke(messages).content}
+            return {"response": strip_thinking(llm.invoke(messages).content)}
 
         return specialist
 

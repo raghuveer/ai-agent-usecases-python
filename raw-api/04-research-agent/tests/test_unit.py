@@ -264,3 +264,19 @@ def test_health_and_run_offline():
     assert "warranty.md" in body["sources"]
     assert body["steps"], "expected at least one recorded step"
     assert body["steps"][0]["action"] == "search"
+
+
+def test_strip_thinking_removes_qwen3_think_blocks():
+    """`/no_think` still emits an empty <think></think> pair; it must not ship.
+
+    Found by running the Docker quickstart, whose default model is a qwen3 tag:
+    answers came back with a leading empty thinking block before the text.
+    """
+    from app.llm import strip_thinking
+
+    empty_block = "<think>" + "\n\n" + "</think>" + "\n\n" + "30 days."
+    assert strip_thinking(empty_block) == "30 days."
+    assert strip_thinking("<think>reasoning</think>Answer.") == "Answer."
+    assert strip_thinking("  30 days.  ") == "30 days."
+    # Chain-of-thought must never survive into a response.
+    assert "reasoning" not in strip_thinking("<think>reasoning</think>ok")

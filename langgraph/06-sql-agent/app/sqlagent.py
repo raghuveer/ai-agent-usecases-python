@@ -30,7 +30,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
-from .llm import system_prompt
+from .llm import strip_thinking, system_prompt
 from .settings import Settings, get_settings
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -191,7 +191,7 @@ def build_sql_graph(conn: sqlite3.Connection, llm: BaseChatModel,
             ),
         ]
         reply = llm.invoke(messages)
-        return {"schema": schema, "sql": extract_sql(reply.content)}
+        return {"schema": schema, "sql": extract_sql(strip_thinking(reply.content))}
 
     def validate(state: SQLState) -> dict:
         try:

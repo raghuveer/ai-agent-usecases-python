@@ -167,10 +167,17 @@ Ollama, no gateway — surfaced four things the usual configuration hides:
     `"<think>\n\n</think>\n\nThe return window is 30 days."`. Invisible in normal
     use because the gateway alias `qwen-local-instruct` is qwen2.5, which has no
     thinking mode; the Docker default is a raw qwen3 tag, which does.
-    **Fixed in `raw-api/01-rag`** (the compose default) with `strip_thinking()`,
-    which also keeps chain-of-thought out of API responses on principle.
-    **Still open for the other 29 OpenAI-surface projects** — they only show it
-    when pointed at a qwen3 model, which now happens via `PROJECT=`.
+    Fixed with `strip_thinking()`, which also keeps chain-of-thought out of API
+    responses on principle. **Swept across all 33 OpenAI-surface projects**
+    (raw-api, langchain, langgraph, including the three `_template/`s), because
+    `PROJECT=` makes every one of them reachable from the Docker quickstart.
+
+    Three different seams, one per approach — the same split the trace work
+    found: raw-api strips inside `chat()`; langchain appends `| strip_thinking`
+    to its LCEL chains (a bare callable is coerced to a Runnable); langgraph
+    strips at each `.content` read, since its nodes consume the message
+    directly. Verified live against `qwen3:1.7b` on both the chain-pipe and
+    `.content` paths.
 14. **Port 11434 collides** with an Ollama the user already runs — and that user
     is exactly who tries this first. The compose file no longer publishes it;
     the app reaches Ollama over the compose network.

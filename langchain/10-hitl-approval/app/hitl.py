@@ -33,7 +33,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
-from .llm import system_prefix
+from .llm import strip_thinking, system_prefix
 
 DRAFT_SYSTEM_PROMPT = (
     "You are an operations assistant. A human will review and approve your work "
@@ -52,7 +52,7 @@ def build_draft_chain(llm: BaseChatModel, settings=None):
             ("human", "Request: {request}\n\nDraft the action message:"),
         ]
     )
-    return prompt | llm | StrOutputParser()
+    return prompt | llm | StrOutputParser() | strip_thinking
 
 
 # --------------------------------------------------------------------------- #

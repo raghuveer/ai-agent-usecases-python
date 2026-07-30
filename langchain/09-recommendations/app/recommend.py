@@ -30,7 +30,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
 
-from .llm import model_profile
+from .llm import model_profile, strip_thinking
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
@@ -129,7 +129,7 @@ def build_reason_chain(llm: BaseChatModel, model_name: str) -> Runnable:
     prompt = ChatPromptTemplate.from_messages(
         [("system", _system_prompt(model_name)), ("human", USER_PROMPT)]
     )
-    return prompt | llm | StrOutputParser()
+    return prompt | llm | StrOutputParser() | strip_thinking
 
 
 def recommend(

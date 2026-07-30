@@ -28,7 +28,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
-from .llm import system_prompt
+from .llm import strip_thinking, system_prompt
 from .settings import Settings, get_settings
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -139,7 +139,7 @@ def build_recommend_graph(llm: BaseChatModel, settings: Settings | None = None):
                 SystemMessage(content=system_prompt(SYSTEM_INSTRUCTION, settings)),
                 HumanMessage(content=_reason_prompt(item, profile)),
             ]
-            reason = llm.invoke(messages).content
+            reason = strip_thinking(llm.invoke(messages).content)
             recommendations.append(
                 {"item_id": item.id, "title": item.title, "reason": reason}
             )

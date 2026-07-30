@@ -37,7 +37,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
-from .llm import system_prefix
+from .llm import strip_thinking, system_prefix
 from .search import format_research, research
 
 # --------------------------------------------------------------------------- #
@@ -89,7 +89,9 @@ def parse_approved(review_text: str) -> bool:
 
 
 def _text(reply) -> str:
-    return reply.content if isinstance(reply, AIMessage) else str(reply)
+    return strip_thinking(
+        reply.content if isinstance(reply, AIMessage) else str(reply)
+    )
 
 
 # --------------------------------------------------------------------------- #

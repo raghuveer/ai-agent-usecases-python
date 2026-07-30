@@ -33,7 +33,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import Tool
 
-from .llm import stop_sequences, system_prefix, truncate_at_stop
+from .llm import stop_sequences, strip_thinking, system_prefix, truncate_at_stop
 
 
 @dataclass
@@ -143,7 +143,9 @@ def run_react(
         # `stop` is sent only where the endpoint honours it, so the cut is also
         # applied locally — before the turn enters the transcript.
         reply = llm.invoke(messages, stop=stop_sequences(llm))
-        text = reply.content if isinstance(reply, AIMessage) else str(reply)
+        text = strip_thinking(
+            reply.content if isinstance(reply, AIMessage) else str(reply)
+        )
         text = truncate_at_stop(text)
         messages.append(AIMessage(content=text))
 

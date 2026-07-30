@@ -29,7 +29,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, ValidationError
 
-from .llm import system_prompt
+from .llm import strip_thinking, system_prompt
 from .settings import Settings, get_settings
 
 # Cap the number of LLM attempts: 1 initial + 1 retry.
@@ -160,7 +160,7 @@ def build_extract_graph(llm: BaseChatModel, settings: Settings | None = None):
                 return {"raw": raw, "error": str(err), "attempts": attempts}
             return {"raw": raw, "attempts": attempts}
         result = llm.invoke(messages)
-        return {"raw": result.content, "attempts": attempts}
+        return {"raw": strip_thinking(result.content), "attempts": attempts}
 
     def validate(state: ExtractState) -> dict:
         try:

@@ -31,7 +31,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.types import interrupt
 
-from .llm import system_prefix
+from .llm import strip_thinking, system_prefix
 
 DRAFT_SYSTEM_PROMPT = (
     "You are an operations assistant. A human will review and approve your work "
@@ -64,7 +64,9 @@ def build_approval_graph(llm: BaseChatModel, settings=None):
             HumanMessage(content=f"Request: {state['request']}\n\nDraft the action message:"),
         ]
         reply = llm.invoke(messages)
-        text = (reply.content if hasattr(reply, "content") else str(reply)).strip()
+        text = strip_thinking(
+            reply.content if hasattr(reply, "content") else str(reply)
+        )
         if not text:
             text = "(the model returned an empty draft)"
         return {"proposed_action": text, "status": "awaiting_approval"}

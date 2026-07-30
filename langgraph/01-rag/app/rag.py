@@ -26,7 +26,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
-from .llm import system_prompt
+from .llm import strip_thinking, system_prompt
 from .settings import Settings, get_settings
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -141,7 +141,7 @@ def build_rag_graph(retriever: Retriever, llm: BaseChatModel,
             ),
         ]
         result = llm.invoke(messages)
-        return {"answer": result.content}
+        return {"answer": strip_thinking(result.content)}
 
     graph = StateGraph(RAGState)
     graph.add_node("retrieve", retrieve)

@@ -25,7 +25,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
-from .llm import model_profile
+from .llm import model_profile, strip_thinking
 
 SYSTEM_PROMPT = (
     "You are an expert programmer. Generate correct, self-contained code for the "
@@ -58,7 +58,7 @@ def build_chain(llm: BaseChatModel, model_name: str):
     prompt = ChatPromptTemplate.from_messages(
         [("system", _system_prompt(model_name)), ("human", USER_PROMPT)]
     )
-    return prompt | llm | StrOutputParser()
+    return prompt | llm | StrOutputParser() | strip_thinking
 
 
 def extract_code(text: str) -> str:

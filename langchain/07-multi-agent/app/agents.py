@@ -30,7 +30,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
 
-from .llm import system_prefix
+from .llm import strip_thinking, system_prefix
 from .search import format_research, research
 
 # --------------------------------------------------------------------------- #
@@ -61,7 +61,7 @@ def build_writer_chain(llm: BaseChatModel) -> Runnable:
          "Topic: {topic}\n\nResearch notes:\n{research}\n{critique}\n"
          "Write the summary now."),
     ])
-    return prompt | llm | StrOutputParser()
+    return prompt | llm | StrOutputParser() | strip_thinking
 
 
 def build_reviewer_chain(llm: BaseChatModel) -> Runnable:
@@ -72,7 +72,7 @@ def build_reviewer_chain(llm: BaseChatModel) -> Runnable:
          "Topic: {topic}\n\nResearch notes:\n{research}\n\n"
          "Draft summary:\n{draft}\n\nReview it now."),
     ])
-    return prompt | llm | StrOutputParser()
+    return prompt | llm | StrOutputParser() | strip_thinking
 
 
 def _critique_block(critique: str | None) -> str:

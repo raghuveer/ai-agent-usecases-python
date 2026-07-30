@@ -26,7 +26,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
-from .llm import system_prompt
+from .llm import strip_thinking, system_prompt
 
 Intent = Literal["billing", "technical", "general"]
 VALID_INTENTS: tuple[Intent, ...] = ("billing", "technical", "general")
@@ -140,7 +140,7 @@ def build_classifier_chain(llm: BaseChatModel):
     prompt = ChatPromptTemplate.from_messages(
         [("system", system_prompt(CLASSIFIER_SYSTEM)), ("human", CLASSIFIER_USER)]
     )
-    return prompt | llm | StrOutputParser()
+    return prompt | llm | StrOutputParser() | strip_thinking
 
 
 def build_responder_chain(llm: BaseChatModel, intent: Intent):
@@ -148,7 +148,7 @@ def build_responder_chain(llm: BaseChatModel, intent: Intent):
     prompt = ChatPromptTemplate.from_messages(
         [("system", system_prompt(SPECIALIST_SYSTEM[intent])), ("human", USER_TEMPLATE)]
     )
-    return prompt | llm | StrOutputParser()
+    return prompt | llm | StrOutputParser() | strip_thinking
 
 
 # --------------------------------------------------------------------------- #

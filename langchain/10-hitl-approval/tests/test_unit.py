@@ -121,3 +121,19 @@ def test_resume_twice_is_404_after_terminal():
     run_id = client.post("/run", json={"request": "approve refund"}).json()["run_id"]
     assert client.post("/resume", json={"run_id": run_id, "approved": True}).status_code == 200
     assert client.post("/resume", json={"run_id": run_id, "approved": True}).status_code == 404
+
+
+def test_strip_thinking_removes_qwen3_think_blocks():
+    """`/no_think` still emits an empty <think></think> pair; it must not ship.
+
+    Found by running the Docker quickstart, whose default model is a qwen3 tag:
+    answers came back with a leading empty thinking block before the text.
+    """
+    from app.llm import strip_thinking
+
+    empty_block = "<think>" + "\n\n" + "</think>" + "\n\n" + "30 days."
+    assert strip_thinking(empty_block) == "30 days."
+    assert strip_thinking("<think>reasoning</think>Answer.") == "Answer."
+    assert strip_thinking("  30 days.  ") == "30 days."
+    # Chain-of-thought must never survive into a response.
+    assert "reasoning" not in strip_thinking("<think>reasoning</think>ok")
