@@ -336,4 +336,4 @@ Re-open if these examples ever switch to Chroma's client/server mode.
 - **10/10 use cases × 4 approaches = 40 projects built.**
 - `claude-agent-sdk`: **175 offline unit tests green**. **All 14 integration tests verified live and passing — all 10 use cases.** Two live passes found 8 defects plus 1 test bug; every one is fixed, and the security-relevant ones (F10, F11, F14) are in `docs/security-review.md`.
 - raw-api / langchain / langgraph: re-pointed at `:8094` and **all 30 live-run 2026-07-30 — 30/30 passing** (18 free-local, 12 cloud). The sweep found one defect (finding 11 above) affecting 6 projects.
-- **Running total: 10 defects found by live runs that mocked tests could not see**, across both the agent-SDK build and the older 30.
+- **Running total: 19 findings recorded; 18 of them surfaced by *running* the code, not by testing it.** The exception is finding 18 (`stop_reason` never reaching a response), which was found by reading. Across both the agent-SDK build and the older 30. Three — F9, F11, F14 — were security controls that were accepted, configured correctly, and simply did not take effect.
