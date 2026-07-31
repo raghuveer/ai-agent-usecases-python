@@ -11,7 +11,7 @@ Every approach here solves an identical task with identical tools. What differs 
 | [`raw-api`](../../raw-api/02-code-generation) | 256 | `app/codegen.py::generate` | You write the control flow; every byte sent is visible at the call site. |
 | [`langchain`](../../langchain/02-code-generation) | 311 | `app/codegen.py::generate` | Composition helpers do the plumbing; the control flow is still yours. |
 | [`langgraph`](../../langgraph/02-code-generation) | 284 | `app/codegen.py::build_codegen_graph` | State and control flow become a typed graph. |
-| [`claude-agent-sdk`](../../claude-agent-sdk/02-code-generation) | 359 | `app/codegen.py::generate` | The SDK owns the loop; you supply tools and a prompt. |
+| [`claude-agent-sdk`](../../claude-agent-sdk/02-code-generation) | 428 | `app/codegen.py::generate` | The SDK owns the loop; you supply tools and a prompt. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
 
@@ -199,6 +199,8 @@ async def generate(
     """Run the agent in a fresh temp workdir and collect what it produced."""
     runner = runner or default_runner
     workdir = Path(tempfile.mkdtemp(prefix="agentsdk-codegen-"))
+    sandbox = sandbox_settings(settings)
+    monitor = SandboxMonitor(requested=sandbox is not None)
     try:
         options = build_options(
             settings,
@@ -208,10 +210,16 @@ async def generate(
             cwd=str(workdir),
             # Edits are auto-accepted: the agent owns this throwaway directory.
             permission_mode="acceptEdits",
+            sandbox=sandbox,
+            # Not logging — this is how the CLI reports that it could not honour
+            # the sandbox. See SandboxMonitor.
+            stderr=monitor.observe,
         )
         result = await runner(task, options)
 
         return CodegenResult(
+            sandboxed=monitor.active,
+            sandbox_note=monitor.note,
             solution=_read(workdir / SOLUTION),
             tests=_read(workdir / TESTS),
             summary=result.text,

@@ -30,6 +30,11 @@ class RunResponse(BaseModel):
     num_turns: int
     cost_usd: float
     stop_reason: str
+    # False means the shell that just ran was NOT confined (F9). Observed from
+    # the CLI's own stderr rather than inferred from config, because the two
+    # disagree — see SandboxMonitor. `sandbox_note` carries the CLI's reason.
+    sandboxed: bool
+    sandbox_note: str | None = None
 
 
 def create_app(runner: Runner | None = None) -> FastAPI:
@@ -56,6 +61,8 @@ def create_app(runner: Runner | None = None) -> FastAPI:
             num_turns=out.num_turns,
             cost_usd=out.cost_usd,
             stop_reason=out.stop_reason,
+            sandboxed=out.sandboxed,
+            sandbox_note=out.sandbox_note,
         )
 
     return app

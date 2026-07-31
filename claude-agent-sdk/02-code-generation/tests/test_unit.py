@@ -16,8 +16,9 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from app import codegen
 from app.agent import AgentResult, ToolCall
-from app.codegen import generate
+from app.codegen import generate, sandbox_settings, sandbox_supported
 from app.main import create_app
 from app.settings import Settings
 
@@ -218,3 +219,101 @@ def test_stop_reason_reports_a_capped_run():
     )
     body = client.post("/run", json=RUN_PAYLOAD).json()
     assert body["stop_reason"] == "max_turns"
+
+
+# --------------------------------------------------------------------------- #
+# F9 -- the shell is sandboxed by default (docs/security-review.md)
+# --------------------------------------------------------------------------- #
+@pytest.fixture
+def on_linux(monkeypatch):
+    """Pretend the host supports sandboxing.
+
+    These assertions are about the *policy*, which must hold everywhere — not
+    about which OS the maintainer happens to use. Skipping them on Windows would
+    leave a security control untested on the machine it is authored on.
+    """
+    monkeypatch.setattr(codegen, "sandbox_supported", lambda: True)
+
+
+def test_sandbox_is_on_by_default(on_linux):
+    """`Bash` here runs model output driven by untrusted request text. The
+    sandbox must not be something a deployer has to remember to switch on."""
+    assert sandbox_settings(Settings())["enabled"] is True
+
+
+def test_sandbox_cannot_be_switched_off_by_the_agent(on_linux):
+    """`allowUnsandboxedCommands` defaults to True in the SDK, which lets any
+    command opt out via `dangerouslyDisableSandbox`. The thing choosing commands
+    is model output -- a control the attacker can request be disabled is not a
+    control."""
+    assert sandbox_settings(Settings())["allowUnsandboxedCommands"] is False
+
+
+def test_sandbox_denies_the_network_by_default(on_linux):
+    """Writing and testing a function needs no network. Denying it removes the
+    exfiltration half of a prompt-injection payload."""
+    assert sandbox_settings(Settings())["network"] == {"allowedDomains": []}
+    assert sandbox_settings(Settings(sandbox_allow_network=True))["network"] == {}
+
+
+def test_sandbox_can_be_disabled_explicitly(on_linux):
+    assert sandbox_settings(Settings(sandbox_bash=False)) is None
+
+
+def test_sandbox_is_not_claimed_where_the_sdk_cannot_provide_it(monkeypatch):
+    """On Windows the SDK accepts the setting and does nothing. Returning a
+    config there would make `sandboxed` report a boundary that is not present —
+    the one failure mode worse than having no sandbox."""
+    monkeypatch.setattr(codegen, "sandbox_supported", lambda: False)
+    assert sandbox_settings(Settings()) is None
+
+
+# Verbatim from a live Windows run with the sandbox forced on — the case that
+# proved config alone cannot answer "was this confined?".
+CLI_DOWNGRADE_WARNING = (
+    "⚠ Sandbox disabled: sandbox is enabled but the Windows sandbox is not "
+    "active on this session (feature gate off)"
+)
+
+
+def test_monitor_reports_active_when_the_cli_says_nothing():
+    monitor = codegen.SandboxMonitor(requested=True)
+    monitor.observe("some unrelated cli chatter")
+    assert monitor.active is True
+    assert monitor.note is None
+
+
+def test_monitor_believes_the_cli_over_the_config():
+    """The bug found by running it: the sandbox was requested and accepted, the
+    CLI downgraded it, and the response still claimed `sandboxed: true`."""
+    monitor = codegen.SandboxMonitor(requested=True)
+    monitor.observe(CLI_DOWNGRADE_WARNING)
+    assert monitor.active is False
+    assert monitor.note is not None and "feature gate off" in monitor.note
+
+
+def test_monitor_is_never_active_when_no_sandbox_was_requested():
+    assert codegen.SandboxMonitor(requested=False).active is False
+
+
+@pytest.mark.anyio
+async def test_run_wires_the_sandbox_and_the_stderr_observer_together():
+    """A sandbox request without an observer would be a claim nobody checks."""
+    seen = {}
+
+    async def spy(prompt, options) -> AgentResult:
+        seen["sandbox"] = options.sandbox
+        seen["stderr"] = options.stderr
+        # Speak as the CLI does when it cannot honour the request.
+        if options.stderr is not None:
+            options.stderr(CLI_DOWNGRADE_WARNING)
+        return AgentResult(text="done")
+
+    out = await generate("write add(a, b)", Settings(), spy)
+
+    assert seen["stderr"] is not None, "no observer: `sandboxed` could only guess"
+    assert (seen["sandbox"] is not None) is sandbox_supported()
+    # The CLI said no, so the answer is no regardless of what was configured.
+    assert out.sandboxed is False
+    if sandbox_supported():
+        assert "feature gate off" in out.sandbox_note

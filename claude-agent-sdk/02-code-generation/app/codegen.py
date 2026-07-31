@@ -28,15 +28,26 @@ run anything the server user can. Two mitigations are applied here:
 2. Artefacts are only ever read back from the workdir, so anything written
    outside it simply does not count as output (`tests_passed` stays false).
 
-Neither is a security boundary. Running untrusted task text against this in
-production needs a real sandbox (container/VM), or the SDK's `sandbox` setting.
+Neither is a security boundary. So a third mitigation now applies by default:
+
+3. The SDK's `sandbox` setting confines `Bash` — no network, and no way for a
+   command to opt itself out (`allowUnsandboxedCommands: False`). See
+   :func:`sandbox_settings`.
+
+That one *is* a boundary, with a caveat worth stating plainly: the SDK sandboxes
+bash on **macOS/Linux only**. On Windows the setting is accepted and silently
+does nothing, so every response reports `sandboxed` — what actually happened —
+rather than what was asked for. When it is false, running untrusted task text
+still needs a disposable, network-isolated container or VM.
 """
 from __future__ import annotations
 
 import shutil
+import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from .agent import AgentResult, Runner, build_options, default_runner, outcome_of
 from .settings import Settings
@@ -77,6 +88,12 @@ class CodegenResult:
     num_turns: int
     cost_usd: float
     stop_reason: str = "end_turn"
+    # Whether the shell was actually confined for this run — the *observed*
+    # state, not the requested one. See :class:`SandboxMonitor`.
+    sandboxed: bool = False
+    # Why not, when the CLI downgraded the request. Null when there was nothing
+    # to report (sandbox active, or never asked for).
+    sandbox_note: str | None = None
 
 
 def _ran_tests_successfully(result: AgentResult, workdir: Path) -> bool:
@@ -98,6 +115,77 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8") if path.exists() else ""
 
 
+# --------------------------------------------------------------------------- #
+# F9 mitigation — sandbox the shell (docs/security-review.md §11.2)
+# --------------------------------------------------------------------------- #
+def sandbox_supported() -> bool:
+    """Whether the SDK can actually sandbox bash on this host.
+
+    The SDK documents bash sandboxing as **macOS/Linux only**. On Windows the
+    setting is accepted and does nothing, which is the dangerous kind of
+    failure: you would believe the shell was confined. Callers get the real
+    answer in ``CodegenResult.sandboxed`` rather than the requested one.
+    """
+    return sys.platform != "win32"
+
+
+def sandbox_settings(settings: Settings) -> dict[str, Any] | None:
+    """Sandbox config for the run, or ``None`` when sandboxing is off/unavailable."""
+    if not settings.sandbox_bash or not sandbox_supported():
+        return None
+    return {
+        "enabled": True,
+        # The agent is *supposed* to run pytest; prompting per command would
+        # break the write-run-fix loop. This is only acceptable because what is
+        # being auto-approved is a *sandboxed* command.
+        "autoAllowBashIfSandboxed": True,
+        # Load-bearing. Left at its default (True), any command can opt itself
+        # out via `dangerouslyDisableSandbox` — and the thing choosing commands
+        # here is model output driven by untrusted request text. A control the
+        # attacker can ask to have switched off is not a control.
+        "allowUnsandboxedCommands": False,
+        "network": (
+            {} if settings.sandbox_allow_network else {"allowedDomains": []}
+        ),
+    }
+
+
+class SandboxMonitor:
+    """Believes the CLI, not the config.
+
+    Requesting a sandbox and getting one are different things, and the gap was
+    found by running it: with the sandbox forced on under Windows the CLI
+    printed
+
+        ``⚠ Sandbox disabled: ... the Windows sandbox is not active on this
+        session (feature gate off). Commands will run WITHOUT sandboxing.``
+
+    — while the response still said ``sandboxed: true``, because the code was
+    reporting what it had *asked for*. Claiming a boundary that is not there is
+    worse than having none: it is the claim a deployer would act on.
+
+    The CLI announces the downgrade on stderr, and the SDK forwards stderr to a
+    callback, so the honest answer is available for the asking. This is the same
+    lesson as ``setting_sources=[]`` (F14) — a security setting is only worth
+    what its *observed* effect is.
+    """
+
+    _DISABLED_MARKERS = ("Sandbox disabled", "WITHOUT sandboxing")
+
+    def __init__(self, requested: bool) -> None:
+        self.requested = requested
+        self.note: str | None = None
+
+    def observe(self, line: str) -> None:
+        if self.note is None and any(m in line for m in self._DISABLED_MARKERS):
+            self.note = line.strip()
+
+    @property
+    def active(self) -> bool:
+        """True only when a sandbox was requested *and* not downgraded."""
+        return self.requested and self.note is None
+
+
 async def generate(
     task: str,
     settings: Settings,
@@ -107,6 +195,8 @@ async def generate(
     """Run the agent in a fresh temp workdir and collect what it produced."""
     runner = runner or default_runner
     workdir = Path(tempfile.mkdtemp(prefix="agentsdk-codegen-"))
+    sandbox = sandbox_settings(settings)
+    monitor = SandboxMonitor(requested=sandbox is not None)
     try:
         options = build_options(
             settings,
@@ -116,10 +206,16 @@ async def generate(
             cwd=str(workdir),
             # Edits are auto-accepted: the agent owns this throwaway directory.
             permission_mode="acceptEdits",
+            sandbox=sandbox,
+            # Not logging — this is how the CLI reports that it could not honour
+            # the sandbox. See SandboxMonitor.
+            stderr=monitor.observe,
         )
         result = await runner(task, options)
 
         return CodegenResult(
+            sandboxed=monitor.active,
+            sandbox_note=monitor.note,
             solution=_read(workdir / SOLUTION),
             tests=_read(workdir / TESTS),
             summary=result.text,

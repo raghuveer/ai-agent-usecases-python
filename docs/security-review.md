@@ -246,7 +246,7 @@ guarded exception, and it is unit-tested with an injection payload.
 
 | # | Finding | Severity | Framework | Status |
 |---|---|---|---|---|
-| **F9** | **Shell execution enabled by default** in `02-code-generation` | 🔴 **High** (as shipped) | LLM05/LLM06, A03 | Documented + bounded; **not eliminated** |
+| **F9** | **Shell execution enabled by default** in `02-code-generation` | 🟠 Medium (was 🔴 High) | LLM05/LLM06, A03 | **Sandboxed by default** (2026-07-31); residual risk where the OS cannot sandbox |
 | **F10** | `cwd` does **not** confine agent file writes | 🟠 Medium | LLM06, A01 | Mitigated (prompt + read-back), not solved |
 | **F11** | Human-approval gate fails **open** on a config mistake | 🟠 Medium | LLM06 | **Fixed** + regression test |
 | **F12** | Parked HITL runs have no TTL or eviction | 🟡 Low | LLM10 | **Fixed** — deny-on-timeout reaper + capacity cap |
@@ -262,12 +262,36 @@ model output which is in turn driven by untrusted request text (`POST /run`
 `{"task": ...}`). Prompt injection in that field is therefore a **command
 execution** risk, not merely a misinformation risk.
 
-It is not "fixed", because removing it removes the use case. What is applied: a
-fresh per-run temp `cwd`, an allow-list without `WebFetch`/`WebSearch`,
-`max_turns` + `max_budget_usd` caps, and explicit RCE warnings in both the module
-docstring and the README. **Anyone deploying UC02 must run it inside a
-disposable, network-isolated, resource-capped container/VM, or use the SDK's
-`sandbox` setting.** The other nine services in this folder do not grant `Bash`.
+It cannot be "fixed" by removal, because removing it removes the use case. What
+is applied: a fresh per-run temp `cwd`, an allow-list without
+`WebFetch`/`WebSearch`, `max_turns` + `max_budget_usd` caps, and explicit RCE
+warnings in both the module docstring and the README. The other nine services in
+this folder do not grant `Bash`.
+
+**Downgraded to Medium on 2026-07-31: the shell is now sandboxed by default.**
+The earlier text told deployers to "use the SDK's `sandbox` setting" — advice
+this repo was not itself taking. It now is, via `SANDBOX_BASH=true`:
+`allowUnsandboxedCommands` is forced to **`false`** (the SDK default of `true`
+lets any command opt out through `dangerouslyDisableSandbox`, and the thing
+choosing commands here is model output driven by untrusted text — a control the
+attacker can request be switched off is not a control), and the sandbox network
+allow-list is empty, which removes the exfiltration half of an injection
+payload.
+
+**Residual risk, and why the finding is not closed.** The SDK sandboxes bash on
+macOS/Linux only. So the response reports `sandboxed` per run — and reports it
+from *observation*, not configuration. That distinction was itself a defect
+found by running the code (finding 19 in `TRACKING.md`): with the sandbox forced
+on under Windows the CLI printed `⚠ Sandbox disabled: … the Windows sandbox is
+not active on this session (feature gate off)` while the response still said
+`sandboxed: true`. A security control reporting its intent rather than its
+effect is the same failure class as **F14** (`setting_sources=[]` documented as
+isolation, not providing it) and **F11** (a gate that failed open silently). The
+CLI announces the downgrade on stderr; `SandboxMonitor` reads it, and
+`sandbox_note` returns the reason verbatim.
+
+**Where `sandboxed` is false, the original guidance stands in full:** run UC02
+inside a disposable, network-isolated, resource-capped container/VM.
 
 **F10 — `cwd` is not a sandbox.** Confirmed empirically during live runs, not
 assumed: the `Write` tool accepts **absolute** paths, and the model repeatedly
@@ -325,7 +349,7 @@ hijacked `PATH` or compromised CLI install would see the key. Pin via
 | ID | Risk | Delta vs the other three approaches |
 |---|---|---|
 | **LLM01** Prompt Injection | 🔴 **Escalated for UC02.** Elsewhere injection is bounded by read-only tools; with `Bash` the blast radius is command execution. The other 9 services stay bounded (custom tools + validators). |
-| **LLM05** Improper Output Handling | 🔴 **Escalated (F9).** Model output is *executed by design* rather than behind a default-off flag. |
+| **LLM05** Improper Output Handling | 🟠 **Escalated (F9), then bounded.** Model output is *executed by design* rather than behind a default-off flag — but the shell is sandboxed by default, with no model-operable escape (`allowUnsandboxedCommands: false`) and no network. Full risk returns wherever the OS cannot sandbox, which each response reports as `sandboxed: false`. |
 | **LLM06** Excessive Agency | 🟠 **Highest in the repo.** Built-in filesystem/shell tools plus subagents. Counterweights: per-subagent tool allow-lists (UC07 gives `analyst`/`writer` **no** tools), an explicit permission gate (UC10), and hard turn/budget caps everywhere. |
 | **LLM10** Unbounded Consumption | 🟢 **Stronger than elsewhere.** The only approach capping **both** turns (`max_turns`) and spend (`max_budget_usd`) per run, not just `max_tokens`. F12 is the remaining gap. |
 | **LLM02** Sensitive Info Disclosure | 🟠 **Was a real leak (F14), now fixed.** Developer `~/.claude` memory reached agent context despite `setting_sources=[]`; closed via `CLAUDE_CONFIG_DIR` isolation. Positive control retained: `collect()` discards `ThinkingBlock` content so chain-of-thought never reaches API responses. Credentials travel via subprocess env and are not logged (F13 noted). |
@@ -347,7 +371,11 @@ Live-run findings.
 ### 11.5 Deployment checklist (in addition to §7)
 
 - **Never expose `02-code-generation` without a real sandbox** — container/VM, no
-  network, CPU/memory/PID caps, non-root, read-only root filesystem (F9).
+  network, CPU/memory/PID caps, non-root, read-only root filesystem (F9). The
+  SDK sandbox is now on by default and helps, but it is bash-scoped and
+  macOS/Linux-only: **check `sandboxed` in the response** rather than assuming,
+  and treat `sandboxed: false` as "none of this is contained". Defence in depth —
+  the OS-level sandbox does not replace the container.
 - **Do not add the guarded tool to `allowed_tools`** in UC10, and keep
   `setting_sources=[]` so local settings cannot shadow the gate (F11).
 - ~~Add a TTL/reaper for parked approvals~~ — **now built in** (`APPROVAL_TTL_SECONDS` / `APPROVAL_MAX_PENDING`); still run UC10 as a **single worker** (F12).

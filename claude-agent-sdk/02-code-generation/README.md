@@ -47,15 +47,49 @@ sometimes not, which made results flaky. Two mitigations:
 2. Artefacts are only read back from the workdir, so anything written outside it
    does not count as output and `tests_passed` stays `false`.
 
-Neither is a security boundary — `Bash` can still run anything the server user
-can. For untrusted input, use a container/VM or the SDK's `sandbox` setting.
+Neither is a security boundary. So the SDK's own `sandbox` is applied too, and
+it is **on by default** here.
+
+## The shell is sandboxed by default (F9)
+
+This is the only project in the repo that grants `Bash`, and it grants it to a
+loop driven by request text you did not write. Prompt injection in `POST /run`
+`{"task": ...}` is therefore a *command execution* risk, not a misinformation
+one — so the sandbox is not something a deployer has to remember to switch on:
+
+| setting | value | why |
+|---|---|---|
+| `enabled` | `true` | on by default; `SANDBOX_BASH=false` to opt out |
+| `autoAllowBashIfSandboxed` | `true` | the agent is *meant* to run pytest; prompting per command breaks the loop. Only acceptable because what is auto-approved is a *sandboxed* command |
+| `allowUnsandboxedCommands` | **`false`** | the SDK default is `true`, which lets any command opt out via `dangerouslyDisableSandbox`. The thing choosing commands is model output — a control the attacker can ask to have disabled is not a control |
+| `network.allowedDomains` | `[]` | writing and testing a function needs no network; denying it removes the exfiltration half of an injection payload |
+
+**Every response reports `sandboxed`, and it is observed, not assumed.** The SDK
+sandboxes bash on **macOS/Linux only**. Forcing the request through on Windows,
+the CLI answered:
+
+```
+⚠ Sandbox disabled: sandbox is enabled but the Windows sandbox is not active
+  on this session (feature gate off)
+  Commands will run WITHOUT sandboxing.
+```
+
+…and the first version of this code still reported `sandboxed: true`, because it
+was describing its own config. The CLI announces the downgrade on stderr and the
+SDK forwards stderr to a callback, so the real answer is available for the
+asking — `sandbox_note` carries the CLI's reason verbatim. Claiming a boundary
+that is not there is worse than having none: it is the claim a deployer acts on.
+
+**When `sandboxed` is false, nothing has changed from the paragraph above** — run
+it in a disposable, network-isolated, resource-capped container or VM.
 
 ## API
 
 - `GET /health` → `{"status":"ok","approach":"claude-agent-sdk","usecase":"02-code-generation"}`
 - `POST /run` body `{"task": str}` →
   `{"solution": str, "tests": str, "summary": str, "tests_passed": bool,
-    "files": [str], "tools_used": [str], "num_turns": int, "cost_usd": float, "stop_reason": str}`
+    "files": [str], "tools_used": [str], "num_turns": int, "cost_usd": float,
+    "stop_reason": str, "sandboxed": bool, "sandbox_note": str|null}`
 
 ## Env vars (`.env.example`)
 
@@ -67,6 +101,8 @@ can. For untrusted input, use a container/VM or the SDK's `sandbox` setting.
 | `AGENT_MAX_TURNS` | `12` | **set this to ~25 here** — see below |
 | `AGENT_MAX_BUDGET_USD` | `1.00` | hard spend cap per run |
 | `AGENT_EFFORT` | `low` | raise for harder tasks |
+| `SANDBOX_BASH` | `true` | confine the shell — see above; macOS/Linux only |
+| `SANDBOX_ALLOW_NETWORK` | `false` | the task needs no network |
 
 **Measured on a live run**, this is the most turn-hungry use case in the approach:
 a FizzBuzz task took **9–10 turns and $0.35–0.48** on `claude-haiku`, because the

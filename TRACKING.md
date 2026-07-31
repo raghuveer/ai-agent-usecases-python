@@ -271,8 +271,69 @@ Ollama, no gateway — surfaced four things the usual configuration hides:
     this field, from a run that was about to finish properly. That is the whole
     argument for the change in one line of output.
 
+## Found while sandboxing the shell (2026-07-31)
+
+19. **A security control that reported its intent instead of its effect.**
+    F9 (`02-code-generation` grants `Bash` to a loop driven by untrusted request
+    text) had stood at 🔴 High-as-shipped, with the review advising deployers to
+    "use the SDK's `sandbox` setting" — advice the repo was not itself taking.
+    Taking it was straightforward; verifying it was where the finding appeared.
+
+    The first version set `sandboxed` from `options.sandbox is not None`. Forcing
+    the sandbox on under Windows, a live run printed:
+
+    ```
+    ⚠ Sandbox disabled: sandbox is enabled but the Windows sandbox is not
+      active on this session (feature gate off)
+      Commands will run WITHOUT sandboxing.
+    ```
+
+    …and the response still said `sandboxed: true`. The config was accepted; the
+    sandbox was not applied. Reporting a boundary that is not there is worse than
+    reporting none, because it is the claim a deployer acts on.
+
+    This is the **third** instance of the same failure class in this folder, and
+    the pattern is now hard to miss: **F11** (a gate that failed open silently),
+    **F14** (`setting_sources=[]` documented as isolation, not delivering it),
+    and now F9. In every case the setting was accepted, the intent was correct,
+    and only running it showed the effect was absent. *A security setting is
+    worth exactly its observed effect.*
+
+    Fixed with `SandboxMonitor`, which reads the CLI's stderr — the SDK forwards
+    it to a callback — and treats the CLI as the authority over the config.
+    `sandbox_note` returns the reason verbatim. Also set
+    `allowUnsandboxedCommands: false`: the SDK's default of `true` lets any
+    command opt out via `dangerouslyDisableSandbox`, and the thing choosing
+    commands is model output. A control the attacker can request be switched off
+    is not a control.
+
+    F9 drops 🔴 High → 🟠 Medium. Not closed: the SDK sandboxes bash on
+    macOS/Linux only, so the container guidance stands wherever `sandboxed` is
+    false. 7 tests, none platform-skipped — a control must not go untested on
+    the machine it is authored on, so the platform check is monkeypatched rather
+    than skipped around. Live-verified twice: `sandboxed: false` with the CLI's
+    reason attached.
+
+## Dependency: chromadb CVE-2026-45829 (assessed 2026-07-31)
+
+Two critical Dependabot alerts (`langchain/01-rag`, `langgraph/01-rag`).
+**Dismissed as `not_used`, not ignored.** The advisory is a *pre-authentication
+code injection in Chroma's HTTP server* — `/api/v2/tenants/{t}/databases/{d}/collections`
+with `trust_remote_code`. These projects use **embedded** chromadb
+(`persist_directory` only): no `HttpClient`, no `chroma run`, no bound port, so
+the vulnerable endpoint is never served.
+
+There is also **nothing to upgrade to**: 1.5.9 is both the latest release and
+vulnerable (`first_patched_version: null`), and `langchain-chroma` requires
+`chromadb>=1.3.5`, so downgrading below the affected range is not available
+either. `raw-api/01-rag` sits on 0.6.3 and is outside the range already.
+
+CI's `pip-audit` gate carries the matching `--ignore-vuln` with the same
+rationale, so the decision is enforced in one place and recorded in two.
+Re-open if these examples ever switch to Chroma's client/server mode.
+
 ## Status
 - **10/10 use cases × 4 approaches = 40 projects built.**
-- `claude-agent-sdk`: **166 offline unit tests green**. **All 14 integration tests verified live and passing — all 10 use cases.** Two live passes found 8 defects plus 1 test bug; every one is fixed, and the security-relevant ones (F10, F11, F14) are in `docs/security-review.md`.
+- `claude-agent-sdk`: **175 offline unit tests green**. **All 14 integration tests verified live and passing — all 10 use cases.** Two live passes found 8 defects plus 1 test bug; every one is fixed, and the security-relevant ones (F10, F11, F14) are in `docs/security-review.md`.
 - raw-api / langchain / langgraph: re-pointed at `:8094` and **all 30 live-run 2026-07-30 — 30/30 passing** (18 free-local, 12 cloud). The sweep found one defect (finding 11 above) affecting 6 projects.
 - **Running total: 10 defects found by live runs that mocked tests could not see**, across both the agent-SDK build and the older 30.

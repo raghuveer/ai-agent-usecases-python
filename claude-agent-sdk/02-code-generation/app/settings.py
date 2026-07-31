@@ -36,6 +36,16 @@ class Settings(BaseSettings):
     agent_max_budget_usd: float = 1.00
     agent_effort: str = "low"
 
+    # Shell sandboxing (F9 in docs/security-review.md). This is the only project
+    # here that grants `Bash`, and it grants it to a loop driven by untrusted
+    # request text — so the sandbox defaults to **on**, and turning it off is an
+    # explicit act. The SDK implements it on macOS/Linux only; `sandboxed` in the
+    # response reports whether it actually applied, rather than assuming it did.
+    sandbox_bash: bool = True
+    # The task is "write a function and test it". It never needs the network, and
+    # denying it removes the exfiltration half of a prompt-injection payload.
+    sandbox_allow_network: bool = False
+
 
 def get_settings() -> Settings:
     return Settings()
