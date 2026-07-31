@@ -11,7 +11,7 @@ Every approach here solves an identical task with identical tools. What differs 
 | [`raw-api`](../../raw-api/09-recommendations) | 243 | `app/recommend.py::recommend` | You write the control flow; every byte sent is visible at the call site. |
 | [`langchain`](../../langchain/09-recommendations) | 305 | `app/recommend.py::recommend` | Composition helpers do the plumbing; the control flow is still yours. |
 | [`langgraph`](../../langgraph/09-recommendations) | 242 | `app/recommend.py::build_recommend_graph` | State and control flow become a typed graph. |
-| [`claude-agent-sdk`](../../claude-agent-sdk/09-recommendations) | 476 | `app/recommend.py::recommend` | The SDK owns the loop; you supply tools and a prompt. |
+| [`claude-agent-sdk`](../../claude-agent-sdk/09-recommendations) | 483 | `app/recommend.py::recommend` | The SDK owns the loop; you supply tools and a prompt. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
 
@@ -130,6 +130,12 @@ def build_recommend_graph(llm: BaseChatModel, settings: Settings | None = None):
 async def recommend(
     user_id: str, settings: Settings, runner: Runner | None = None
 ) -> RecoResult:
+    """Recommend catalog items for `user_id`, with reasons.
+
+    Every returned id is checked against the real catalog before it
+    leaves this function: a hallucinated product fails here rather than
+    reaching a user.
+    """
     runner = runner or default_runner
     options = build_options(
         settings,

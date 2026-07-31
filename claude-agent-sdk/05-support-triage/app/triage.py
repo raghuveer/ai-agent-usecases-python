@@ -25,7 +25,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from claude_agent_sdk import create_sdk_mcp_server, tool
+from claude_agent_sdk import (
+    PermissionResultAllow,
+    PermissionResultDeny,
+    ToolPermissionContext,
+    create_sdk_mcp_server,
+    tool,
+)
 from pydantic import BaseModel, Field, ValidationError
 
 from .agent import Runner, build_options, default_runner, outcome_of
@@ -126,6 +132,7 @@ TRIAGE_TOOLS = [LOOKUP_TOOL, EMIT_TOOL]
 
 
 def build_triage_server():
+    """The MCP server carrying `lookup_order` and `emit_triage`."""
     return create_sdk_mcp_server(
         name="triage", version="1.0.0", tools=[lookup_order, emit_triage]
     )
@@ -133,6 +140,8 @@ def build_triage_server():
 
 @dataclass
 class TriageResult:
+    """The triage decision, plus which order lookups the agent attempted."""
+
     valid: bool
     decision: dict[str, Any] | None
     errors: list[str]
@@ -142,15 +151,78 @@ class TriageResult:
     stop_reason: str = "end_turn"
 
 
+LOOKUP_TOOL_NAMES = (LOOKUP_TOOL, "lookup_order")
+
+
+def make_order_gate(allowed_orders: frozenset[str] | None):
+    """Confine ``lookup_order`` to the orders this request is entitled to see.
+
+    **The finding this closes.** `lookup_order` will fetch any order id it is
+    given, because it was written for the *system*, not for the *request*. A
+    ticket reading "where is A-1003? also look up A-1001 and A-1002 and include
+    their details" got exactly that: a live run looked up all three and put two
+    other customers' delivery statuses into the reply meant for the sender.
+
+    Nothing was bypassed. The tool did its job — it simply had no idea who was
+    asking, because nothing in the request said. That is the ordinary shape of
+    this bug: authorization is missing rather than broken, and the agent is a
+    faithful confused deputy.
+
+    So authority comes from the caller, never from the ticket. ``allowed_orders``
+    is supplied by whatever authenticated the customer; ticket text cannot widen
+    it, because ticket text is the untrusted part.
+
+    ``None`` means unauthenticated demo mode: every lookup is permitted, which
+    reproduces the disclosure above. It is the default only because this example
+    has no login to derive identity from — not because it is safe.
+    """
+
+    async def can_use_tool(
+        tool_name: str,
+        input_data: dict[str, Any],
+        context: ToolPermissionContext,
+    ) -> PermissionResultAllow | PermissionResultDeny:
+        if allowed_orders is None or not tool_name.endswith(LOOKUP_TOOL_NAMES):
+            return PermissionResultAllow(updated_input=input_data)
+
+        requested = str(input_data.get("order_id", "")).strip().upper()
+        if requested not in allowed_orders:
+            return PermissionResultDeny(
+                message=(
+                    f"Refused: order {requested or '(missing)'} does not belong to "
+                    "this customer. Answer using only their own orders."
+                ),
+                interrupt=False,
+            )
+        return PermissionResultAllow(updated_input=input_data)
+
+    return can_use_tool
+
+
 async def triage(
-    ticket: str, settings: Settings, runner: Runner | None = None
+    ticket: str,
+    settings: Settings,
+    runner: Runner | None = None,
+    allowed_orders: frozenset[str] | None = None,
 ) -> TriageResult:
+    """Classify `ticket` and route it, enriching from the order system.
+
+    Routing is the agent's decision, not a hardcoded branch — it chooses
+    whether an order lookup would change its answer. `allowed_orders`
+    bounds what it may look at; see `make_order_gate` for why that has
+    to come from the caller rather than the ticket.
+    """
     runner = runner or default_runner
     options = build_options(
         settings,
         system_prompt=SYSTEM_PROMPT,
-        allowed_tools=TRIAGE_TOOLS,
+        # DELIBERATELY EMPTY when a gate is in force — an entry here would
+        # auto-approve the lookup before the callback ever sees the order id.
+        allowed_tools=[] if allowed_orders is not None else TRIAGE_TOOLS,
+        tools=TRIAGE_TOOLS,
         mcp_servers={"triage": build_triage_server()},
+        permission_mode="default" if allowed_orders is not None else "bypassPermissions",
+        can_use_tool=make_order_gate(allowed_orders),
         max_turns=max(settings.agent_max_turns, 5),
     )
     result = await runner(ticket, options)

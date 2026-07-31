@@ -117,6 +117,7 @@ REACT_TOOLS = ["mcp__metrics__lookup_metric", "mcp__metrics__calculate"]
 
 
 def build_metrics_server():
+    """The MCP server carrying `lookup_metric` and `calculate`."""
     return create_sdk_mcp_server(
         name="metrics", version="1.0.0", tools=[lookup_metric, calculate]
     )
@@ -130,6 +131,8 @@ class Step:
 
 @dataclass
 class ReactResult:
+    """The answer and the tool trace that produced it."""
+
     answer: str
     trace: list[Step]
     num_turns: int
@@ -141,6 +144,13 @@ class ReactResult:
 async def run_react(
     question: str, settings: Settings, runner: Runner | None = None
 ) -> ReactResult:
+    """Answer `question` by looping: look up metrics, calculate, conclude.
+
+    There is no loop in this file — the SDK *is* the loop, which is the
+    point of this use case. The agent cannot see metric values or do
+    arithmetic itself; both come from tools, so the trace shows its
+    whole reasoning path.
+    """
     runner = runner or default_runner
     options = build_options(
         settings,

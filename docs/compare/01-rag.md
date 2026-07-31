@@ -11,7 +11,7 @@ Every approach here solves an identical task with identical tools. What differs 
 | [`raw-api`](../../raw-api/01-rag) | 241 | `app/rag.py::answer` | Retrieve, build a prompt, call once. No framework needed. |
 | [`langchain`](../../langchain/01-rag) | 293 | `app/rag.py::build_chain` | The natural fit: a retriever and an LCEL chain, declared not written. |
 | [`langgraph`](../../langgraph/01-rag) | 238 | `app/rag.py::build_rag_graph` | A graph for a straight line — structural cost with no payoff here. |
-| [`claude-agent-sdk`](../../claude-agent-sdk/01-rag) | 333 | `app/rag.py::answer` | No vector store: retrieval is lexical Grep/Read, so phrasing can miss. |
+| [`claude-agent-sdk`](../../claude-agent-sdk/01-rag) | 395 | `app/rag.py::answer` | No vector store: retrieval is lexical Grep/Read, so phrasing can miss. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
 
@@ -106,14 +106,25 @@ async def answer(
     runner: Runner | None = None,
     corpus_dir: Path | None = None,
 ) -> RagResult:
+    """Answer `question` from the corpus, confined to it by the gate.
+
+    Retrieval here is lexical (`Grep`/`Read`), not vector search, so a
+    semantically-phrased question can miss where `langchain/01-rag`
+    would hit. That is the trade this project exists to show.
+    """
     runner = runner or default_runner
+    root = (corpus_dir or CORPUS_DIR).resolve()
     options = build_options(
         settings,
         system_prompt=SYSTEM_PROMPT,
-        allowed_tools=RAG_TOOLS,
+        # DELIBERATELY EMPTY. Naming a tool here auto-approves it *before*
+        # `can_use_tool` runs, so the gate below would never see a path.
+        allowed_tools=[],
         tools=RAG_TOOLS,
-        # Scopes the agent to the corpus: it can only search what lives here.
-        cwd=str(corpus_dir or CORPUS_DIR),
+        # Where the agent starts. NOT where it is allowed — that is the gate.
+        cwd=str(root),
+        permission_mode="default",
+        can_use_tool=make_corpus_gate(root),
     )
     result = await runner(question, options)
     return RagResult(

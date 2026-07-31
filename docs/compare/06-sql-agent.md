@@ -11,7 +11,7 @@ Every approach here solves an identical task with identical tools. What differs 
 | [`raw-api`](../../raw-api/06-sql-agent) | 274 | `app/sqlagent.py::answer` | You write the control flow; every byte sent is visible at the call site. |
 | [`langchain`](../../langchain/06-sql-agent) | 319 | `app/sqlagent.py::answer_question` | Composition helpers do the plumbing; the control flow is still yours. |
 | [`langgraph`](../../langgraph/06-sql-agent) | 285 | `app/sqlagent.py::build_sql_graph` | State and control flow become a typed graph. |
-| [`claude-agent-sdk`](../../claude-agent-sdk/06-sql-agent) | 486 | `app/sql_agent.py::ask` | The SDK owns the loop; you supply tools and a prompt. |
+| [`claude-agent-sdk`](../../claude-agent-sdk/06-sql-agent) | 502 | `app/sql_agent.py::ask` | The SDK owns the loop; you supply tools and a prompt. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
 
@@ -135,6 +135,13 @@ def build_sql_graph(conn: sqlite3.Connection, llm: BaseChatModel,
 async def ask(
     question: str, settings: Settings, runner: Runner | None = None
 ) -> SqlResult:
+    """Answer `question` by letting the agent explore the schema itself.
+
+    No schema is pasted into the prompt: the agent lists tables and
+    describes the ones it needs. Every statement goes through
+    `assert_read_only` *and* a connection opened `mode=ro`, so a write
+    that slipped past the first check still fails at the driver.
+    """
     runner = runner or default_runner
     options = build_options(
         settings,

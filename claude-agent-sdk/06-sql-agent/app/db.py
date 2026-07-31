@@ -134,6 +134,7 @@ def connect_read_only(path: Path) -> sqlite3.Connection:
 
 
 def list_tables(path: Path) -> list[str]:
+    """The real table names — which is also the allow-list `describe_table` uses."""
     with connect_read_only(path) as conn:
         rows = conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
@@ -156,6 +157,14 @@ def describe_table(path: Path, table: str) -> list[dict[str, Any]]:
 
 
 def run_select(path: Path, sql: str, limit: int = 50) -> list[dict[str, Any]]:
+    """Run one model-written read query, behind both defences.
+
+    `assert_read_only` rejects anything that is not a single SELECT/WITH — a
+    blocklist, and therefore the weaker half. The connection is opened `mode=ro`,
+    so a write that got past the parser still fails at the driver. Rows are
+    capped by `limit` so a `SELECT *` on a large table cannot exhaust memory or
+    the context window.
+    """
     statement = assert_read_only(sql)
     with connect_read_only(path) as conn:
         rows = conn.execute(statement).fetchmany(limit)

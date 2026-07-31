@@ -20,6 +20,16 @@ USECASE = "05-support-triage"
 
 class RunRequest(BaseModel):
     ticket: str = Field(max_length=8000)
+    # The orders this customer may see. **In production this comes from whatever
+    # authenticated the session — never from the request body**, which is as
+    # untrusted as the ticket text itself. It sits here because this example has
+    # no login to derive an identity from; it stands in for that layer so the
+    # authorization path is real code rather than a paragraph.
+    #
+    # Omitted → unauthenticated demo mode: every order is visible. That is not a
+    # safe default, it is the absence of a default, and it reproduces the
+    # cross-customer disclosure documented in `triage.make_order_gate`.
+    authorized_order_ids: list[str] | None = Field(default=None, max_length=50)
 
 
 class RunResponse(BaseModel):
@@ -55,7 +65,12 @@ def create_app(runner: Runner | None = None) -> FastAPI:
 
     @app.post("/run", response_model=RunResponse)
     async def run(req: RunRequest) -> RunResponse:
-        out = await triage(req.ticket, settings, app.state.runner)
+        allowed = (
+            frozenset(o.strip().upper() for o in req.authorized_order_ids)
+            if req.authorized_order_ids is not None
+            else None
+        )
+        out = await triage(req.ticket, settings, app.state.runner, allowed)
         return RunResponse(
             valid=out.valid,
             decision=out.decision,

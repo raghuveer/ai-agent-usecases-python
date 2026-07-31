@@ -11,7 +11,7 @@ Every approach here solves an identical task with identical tools. What differs 
 | [`raw-api`](../../raw-api/03-data-extraction) | 252 | `app/extract.py::extract_invoice` | One call plus a validating parser — and a retry that tells the model what was wrong. |
 | [`langchain`](../../langchain/03-data-extraction) | 329 | `app/extract.py::extract_invoice` | Structured output is a first-class chain concern. |
 | [`langgraph`](../../langgraph/03-data-extraction) | 261 | `app/extract.py::build_extract_graph` | Extract → validate → repair is a genuine pipeline, so nodes earn their keep. |
-| [`claude-agent-sdk`](../../claude-agent-sdk/03-data-extraction) | 376 | `app/extract.py::extract` | An agent harness doing a one-shot job: no loop ever runs. |
+| [`claude-agent-sdk`](../../claude-agent-sdk/03-data-extraction) | 413 | `app/extract.py::extract` | An agent harness doing a one-shot job: no loop ever runs. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
 
@@ -177,6 +177,12 @@ def build_extract_graph(llm: BaseChatModel, settings: Settings | None = None):
 async def extract(
     document: str, settings: Settings, runner: Runner | None = None
 ) -> ExtractResult:
+    """Extract one invoice from `document` via the emit-tool schema.
+
+    The structured record arrives as the tool's *input*, so there is no
+    JSON to parse out of prose. Shape is checked by Pydantic and the
+    total is checked against the line items (see `Invoice`).
+    """
     runner = runner or default_runner
     options = build_options(
         settings,

@@ -15,6 +15,13 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from claude_agent_sdk import (
+    PermissionResultAllow,
+    PermissionResultDeny,
+    ToolPermissionContext,
+)
+
+from app import research as MODULE
 from app.agent import AgentResult, ToolCall
 from app.main import create_app
 from app.research import CORPUS_DIR, research
@@ -94,7 +101,9 @@ async def test_offline_mode_cannot_reach_the_network():
     seen = {}
 
     async def spy(prompt, options) -> AgentResult:
-        seen["tools"] = options.allowed_tools
+        # `tools=` is what the agent HAS; `allowed_tools` is only what is
+        # auto-approved, and is deliberately empty so the corpus gate runs.
+        seen["tools"] = options.tools
         seen["prompt"] = options.system_prompt
         seen["cwd"] = options.cwd
         return AgentResult(text="ok")
@@ -112,7 +121,9 @@ async def test_web_mode_adds_web_tools_and_keeps_local_ones():
     seen = {}
 
     async def spy(prompt, options) -> AgentResult:
-        seen["tools"] = options.allowed_tools
+        # `tools=` is what the agent HAS; `allowed_tools` is only what is
+        # auto-approved, and is deliberately empty so the corpus gate runs.
+        seen["tools"] = options.tools
         seen["prompt"] = options.system_prompt
         return AgentResult(text="ok")
 
@@ -176,3 +187,72 @@ def test_stop_reason_reports_a_capped_run():
     )
     body = client.post("/run", json=RUN_PAYLOAD).json()
     assert body["stop_reason"] == "max_turns"
+
+
+# --------------------------------------------------------------------------- #
+# F15 — file access is confined to the corpus
+# --------------------------------------------------------------------------- #
+async def _decide(gate, tool="Read", **inp):
+    return await gate(tool, inp, ToolPermissionContext())
+
+
+@pytest.fixture
+def corpus_gate(tmp_path):
+    return MODULE.make_corpus_gate(tmp_path)
+
+
+@pytest.mark.anyio
+async def test_reads_inside_the_corpus_are_allowed(corpus_gate, tmp_path):
+    """The shapes the CLI actually sends: absolute, relative, and no path."""
+    for inp in (
+        {"file_path": str(tmp_path / "notes.md")},
+        {"file_path": "notes.md"},
+        {"path": str(tmp_path)},
+        {"path": "."},
+        {"pattern": "ReAct"},
+    ):
+        assert isinstance(await _decide(corpus_gate, **inp), PermissionResultAllow), inp
+
+
+@pytest.mark.anyio
+async def test_paths_outside_the_corpus_are_refused(corpus_gate, tmp_path):
+    """The attack that worked before this gate existed.
+
+    A live agent asked to read an absolute path outside its corpus did so and
+    reported success — including a project's own `.env`, which holds the gateway
+    key. "Read /path/to/.env" is the whole technique.
+    """
+    for raw in ("/etc/passwd", "../secrets.env", str(tmp_path.parent / "x.md")):
+        d = await _decide(corpus_gate, file_path=raw)
+        assert isinstance(d, PermissionResultDeny), raw
+        assert d.interrupt is False
+
+
+@pytest.mark.anyio
+async def test_symlink_out_of_the_corpus_is_refused(tmp_path):
+    """`resolve()` follows links, so one planted inside is not a way out."""
+    outside, corpus = tmp_path / "outside", tmp_path / "corpus"
+    outside.mkdir(); corpus.mkdir()
+    try:
+        (corpus / "link").symlink_to(outside, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks not permitted on this host")
+    d = await _decide(MODULE.make_corpus_gate(corpus), file_path="link/secrets.env")
+    assert isinstance(d, PermissionResultDeny)
+
+
+@pytest.mark.anyio
+async def test_every_path_argument_spelling_is_checked(corpus_gate):
+    """Read says file_path, Grep/Glob say path. Missing one leaves a hole."""
+    for key in MODULE.PATH_ARGS:
+        assert isinstance(
+            await _decide(corpus_gate, **{key: "/etc/passwd"}), PermissionResultDeny
+        ), key
+
+
+@pytest.mark.anyio
+async def test_tools_without_a_path_are_not_blocked(corpus_gate):
+    """Delegation and web tools carry no path; gating them would break the run."""
+    for tool, inp in (("Agent", {"subagent_type": "researcher"}),
+                      ("WebFetch", {"url": "https://example.com"})):
+        assert isinstance(await _decide(corpus_gate, tool, **inp), PermissionResultAllow)

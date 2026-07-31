@@ -167,6 +167,7 @@ RECO_TOOLS = [PROFILE_TOOL, CATALOG_TOOL, EMIT_TOOL]
 
 
 def build_reco_server():
+    """The MCP server carrying the profile, catalog and emit tools."""
     return create_sdk_mcp_server(
         name="reco",
         version="1.0.0",
@@ -176,6 +177,8 @@ def build_reco_server():
 
 @dataclass
 class RecoResult:
+    """Grounded recommendations, or the reasons they were rejected."""
+
     valid: bool
     items: list[dict[str, Any]]
     rationale: str
@@ -188,6 +191,12 @@ class RecoResult:
 async def recommend(
     user_id: str, settings: Settings, runner: Runner | None = None
 ) -> RecoResult:
+    """Recommend catalog items for `user_id`, with reasons.
+
+    Every returned id is checked against the real catalog before it
+    leaves this function: a hallucinated product fails here rather than
+    reaching a user.
+    """
     runner = runner or default_runner
     options = build_options(
         settings,

@@ -14,7 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.agent import AgentResult, ToolCall
-from app.extract import EMIT_TOOL, extract
+from app.extract import EMIT_TOOL, _validate, extract
 from app.main import create_app
 from app.settings import Settings
 
@@ -187,3 +187,53 @@ def test_stop_reason_reports_a_capped_run():
     )
     body = client.post("/run", json=RUN_PAYLOAD).json()
     assert body["stop_reason"] == "max_turns"
+
+
+# --------------------------------------------------------------------------- #
+# F17 — the total is checked against the line items, not trusted
+# --------------------------------------------------------------------------- #
+BASE = {
+    "invoice_number": "INV-1",
+    "vendor": "Acme",
+    "invoice_date": "2026-03-11",
+    "currency": "GBP",
+}
+
+
+def test_a_total_that_disagrees_with_the_line_items_is_invalid():
+    """The injected-total attack, caught by arithmetic rather than by judgement.
+
+    A document carrying a note addressed "TO THE EXTRACTION SYSTEM" — claiming
+    the printed 300.00 was a typo for 3.00 — was ignored by the model on the
+    run that found this. Nothing in the code would have noticed if it had not,
+    and "the model usually declines" is not a control.
+    """
+    out = _validate({**BASE, "total": 3.00, "line_items": [
+        {"description": "Widgets", "amount": 250.00},
+        {"description": "Gaskets", "amount": 50.00},
+    ]})
+    assert out.valid is False
+    assert any("does not match the sum of line items" in e for e in out.errors)
+
+
+def test_a_consistent_invoice_is_accepted():
+    out = _validate({**BASE, "total": 300.00, "line_items": [
+        {"description": "Widgets", "amount": 250.00},
+        {"description": "Gaskets", "amount": 50.00},
+    ]})
+    assert out.valid is True and out.invoice["total"] == 300.00
+
+
+def test_rounding_noise_does_not_fail_a_correct_invoice():
+    """The check exists to catch disagreement, not float representation."""
+    out = _validate({**BASE, "total": 0.30, "line_items": [
+        {"description": "a", "amount": 0.10},
+        {"description": "b", "amount": 0.20},
+    ]})
+    assert out.valid is True
+
+
+def test_an_invoice_without_line_items_is_not_second_guessed():
+    """Nothing to check against — inventing a failure here would be worse."""
+    out = _validate({**BASE, "total": 300.00, "line_items": []})
+    assert out.valid is True

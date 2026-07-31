@@ -11,7 +11,7 @@ Every approach here solves an identical task with identical tools. What differs 
 | [`raw-api`](../../raw-api/04-research-agent) | 413 | `app/agent.py::run_agent` | You write the control flow; every byte sent is visible at the call site. |
 | [`langchain`](../../langchain/04-research-agent) | 483 | `app/agent.py::run_agent` | Composition helpers do the plumbing; the control flow is still yours. |
 | [`langgraph`](../../langgraph/04-research-agent) | 455 | `app/agent.py::build_agent_graph` | State and control flow become a typed graph. |
-| [`claude-agent-sdk`](../../claude-agent-sdk/04-research-agent) | 363 | `app/research.py::research` | The SDK owns the loop; you supply tools and a prompt. |
+| [`claude-agent-sdk`](../../claude-agent-sdk/04-research-agent) | 425 | `app/research.py::research` | The SDK owns the loop; you supply tools and a prompt. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
 
@@ -317,16 +317,27 @@ async def research(
     runner: Runner | None = None,
     corpus_dir: Path | None = None,
 ) -> ResearchResult:
+    """Research `question` over the corpus, and the web if enabled.
+
+    Citations are recovered from what the agent actually opened, not
+    from prose it wrote, so a claimed source it never fetched does not
+    appear. Web mode widens trust — see `make_corpus_gate`.
+    """
     runner = runner or default_runner
     web = settings.research_allow_web
     tools = OFFLINE_TOOLS + (WEB_TOOLS if web else [])
 
+    root = (corpus_dir or CORPUS_DIR).resolve()
     options = build_options(
         settings,
         system_prompt=WEB_PROMPT if web else OFFLINE_PROMPT,
-        allowed_tools=tools,
+        # DELIBERATELY EMPTY — an entry here auto-approves before the gate runs.
+        allowed_tools=[],
         tools=tools,
-        cwd=str(corpus_dir or CORPUS_DIR),
+        # Where the agent starts. NOT where it is allowed — that is the gate.
+        cwd=str(root),
+        permission_mode="default",
+        can_use_tool=make_corpus_gate(root),
         # Research is iterative: search, read, refine.
         max_turns=max(settings.agent_max_turns, 8),
     )

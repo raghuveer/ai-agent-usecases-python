@@ -26,10 +26,10 @@ earns less here than in the agentic use cases. See the README.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, ClassVar
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from .agent import Runner, build_options, default_runner, outcome_of
 from .settings import Settings
@@ -49,6 +49,43 @@ class Invoice(BaseModel):
     currency: str = Field(max_length=10)
     total: float
     line_items: list[LineItem] = Field(default_factory=list)
+
+    # Tolerance for float noise and rounded line amounts, not for disagreement.
+    SUM_TOLERANCE: ClassVar[float] = 0.01
+
+    @model_validator(mode="after")
+    def _total_matches_line_items(self) -> "Invoice":
+        """Check the arithmetic instead of trusting it.
+
+        Everything else here validates *shape* — that a number is a number. The
+        one thing worth extracting is the number itself, and shape checks cannot
+        tell a right total from a wrong one.
+
+        The gap showed up under an injected document: a note addressed "TO THE
+        EXTRACTION SYSTEM" claiming the printed total was a typo and the real
+        figure was 3.00 instead of 300.00. The model ignored it — this time.
+        Nothing in the code would have noticed if it had not, and "the model
+        usually declines" is not a control.
+
+        Line amounts are recomputed and compared. It is a cheap check that does
+        not care how the wrong number arrived: injection, hallucination, or a
+        genuine misread all fail it identically.
+
+        Deliberately only applied when line items are present. An invoice that
+        itemises nothing has nothing to check against, and one with unitemised
+        tax or shipping would fail a stricter rule for being correct — so a
+        mismatch here means "these two disagree", which is worth a human, not
+        "this is fraud".
+        """
+        if not self.line_items:
+            return self
+        computed = round(sum(item.amount for item in self.line_items), 2)
+        if abs(computed - self.total) > self.SUM_TOLERANCE:
+            raise ValueError(
+                f"total {self.total} does not match the sum of line items "
+                f"({computed}); the document and the extracted total disagree"
+            )
+        return self
 
 
 # JSON Schema mirroring Invoice. Written explicitly (rather than generated from
@@ -104,11 +141,14 @@ Rules:
 
 
 def build_extract_server():
+    """The MCP server carrying `emit_invoice` — the schema *is* the contract."""
     return create_sdk_mcp_server(name="extract", version="1.0.0", tools=[emit_invoice])
 
 
 @dataclass
 class ExtractResult:
+    """A validated invoice, or the reasons it failed validation."""
+
     valid: bool
     invoice: dict[str, Any] | None = None
     errors: list[str] = field(default_factory=list)
@@ -133,6 +173,12 @@ def _validate(payload: dict[str, Any]) -> ExtractResult:
 async def extract(
     document: str, settings: Settings, runner: Runner | None = None
 ) -> ExtractResult:
+    """Extract one invoice from `document` via the emit-tool schema.
+
+    The structured record arrives as the tool's *input*, so there is no
+    JSON to parse out of prose. Shape is checked by Pydantic and the
+    total is checked against the line items (see `Invoice`).
+    """
     runner = runner or default_runner
     options = build_options(
         settings,

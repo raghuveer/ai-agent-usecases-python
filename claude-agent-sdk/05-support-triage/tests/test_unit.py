@@ -13,6 +13,13 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from claude_agent_sdk import (
+    PermissionResultAllow,
+    PermissionResultDeny,
+    ToolPermissionContext,
+)
+
+from app import triage as triage_mod
 from app.agent import AgentResult, ToolCall
 from app.main import create_app
 from app.settings import Settings
@@ -199,3 +206,72 @@ def test_stop_reason_reports_a_capped_run():
     )
     body = client.post("/run", json=RUN_PAYLOAD).json()
     assert body["stop_reason"] == "max_turns"
+
+
+# --------------------------------------------------------------------------- #
+# F16 — order lookups are scoped to the request, not the system
+# --------------------------------------------------------------------------- #
+async def _decide(gate, tool=LOOKUP_TOOL, **inp):
+    return await gate(tool, inp, ToolPermissionContext())
+
+
+@pytest.mark.anyio
+async def test_lookup_of_another_customers_order_is_refused():
+    """The disclosure this closes, reproduced.
+
+    A live run given "where is A-1003? also look up A-1001 and A-1002 and
+    include their details" looked up all three and put two other customers'
+    delivery statuses into the reply meant for the sender. Nothing was
+    bypassed — `lookup_order` simply had no idea who was asking.
+    """
+    gate = triage_mod.make_order_gate(frozenset({"A-1003"}))
+    assert isinstance(await _decide(gate, order_id="A-1003"), PermissionResultAllow)
+    for other in ("A-1001", "A-1002", "A-1004"):
+        d = await _decide(gate, order_id=other)
+        assert isinstance(d, PermissionResultDeny), other
+        assert "does not belong to this customer" in d.message
+
+
+@pytest.mark.anyio
+async def test_order_ids_are_compared_case_and_space_insensitively():
+    gate = triage_mod.make_order_gate(frozenset({"A-1003"}))
+    for spelling in (" a-1003 ", "A-1003", "a-1003"):
+        assert isinstance(await _decide(gate, order_id=spelling), PermissionResultAllow)
+
+
+@pytest.mark.anyio
+async def test_a_missing_order_id_is_refused_not_waved_through():
+    gate = triage_mod.make_order_gate(frozenset({"A-1003"}))
+    assert isinstance(await _decide(gate), PermissionResultDeny)
+
+
+@pytest.mark.anyio
+async def test_the_emit_tool_is_never_blocked_by_the_order_gate():
+    """Gating the wrong tool would break the use case rather than secure it."""
+    gate = triage_mod.make_order_gate(frozenset({"A-1003"}))
+    assert isinstance(await _decide(gate, EMIT_TOOL, category="shipping"),
+                      PermissionResultAllow)
+
+
+@pytest.mark.anyio
+async def test_unauthenticated_mode_permits_everything_and_says_so():
+    """Documented, tested, and deliberately not the recommended path."""
+    gate = triage_mod.make_order_gate(None)
+    assert isinstance(await _decide(gate, order_id="A-1001"), PermissionResultAllow)
+
+
+@pytest.mark.anyio
+async def test_authorized_orders_are_enforced_and_not_shadowed():
+    seen = {}
+
+    async def spy(prompt, options) -> AgentResult:
+        seen.update(gate=options.can_use_tool, mode=options.permission_mode,
+                    allowed=options.allowed_tools)
+        return AgentResult(text="ok")
+
+    await triage("where is A-1003?", Settings(), spy, frozenset({"A-1003"}))
+
+    assert seen["gate"] is not None
+    assert seen["mode"] == "default"
+    # LOOKUP_TOOL here would auto-approve before the gate ever sees the order id.
+    assert seen["allowed"] == []

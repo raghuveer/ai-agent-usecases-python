@@ -99,6 +99,7 @@ Rules:
 
 
 def build_sql_server():
+    """The MCP server carrying the three read-only database tools."""
     return create_sdk_mcp_server(
         name="sql",
         version="1.0.0",
@@ -108,6 +109,8 @@ def build_sql_server():
 
 @dataclass
 class SqlResult:
+    """The answer, plus every SQL statement the agent actually ran."""
+
     answer: str
     queries: list[str]
     tools_used: list[str]
@@ -119,6 +122,13 @@ class SqlResult:
 async def ask(
     question: str, settings: Settings, runner: Runner | None = None
 ) -> SqlResult:
+    """Answer `question` by letting the agent explore the schema itself.
+
+    No schema is pasted into the prompt: the agent lists tables and
+    describes the ones it needs. Every statement goes through
+    `assert_read_only` *and* a connection opened `mode=ro`, so a write
+    that slipped past the first check still fails at the driver.
+    """
     runner = runner or default_runner
     options = build_options(
         settings,

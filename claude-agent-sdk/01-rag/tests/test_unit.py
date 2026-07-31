@@ -15,6 +15,13 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from claude_agent_sdk import (
+    PermissionResultAllow,
+    PermissionResultDeny,
+    ToolPermissionContext,
+)
+
+from app import rag
 from app.agent import AgentResult, ToolCall
 from app.main import create_app
 from app.rag import CORPUS_DIR, answer
@@ -87,12 +94,20 @@ def test_read_tool_alternate_path_key_is_handled():
 
 
 @pytest.mark.anyio
-async def test_agent_is_scoped_to_the_corpus_and_read_only():
+async def test_agent_starts_in_the_corpus_and_gets_no_write_tools():
+    """Note what this does *not* assert.
+
+    It was called `..._is_scoped_to_the_corpus_and_read_only`, and the scoping
+    half was never true: `cwd` sets where the agent starts, and the file tools
+    take absolute paths. A live agent asked for one read outside the corpus
+    without difficulty. Confinement is the gate's job and is tested below; this
+    test now claims only what it checks.
+    """
     seen = {}
 
     async def spy(prompt, options) -> AgentResult:
         seen["cwd"] = options.cwd
-        seen["tools"] = options.allowed_tools
+        seen["tools"] = options.tools
         return AgentResult(text="ok")
 
     await answer("q", Settings(), spy)
@@ -146,3 +161,92 @@ def test_stop_reason_reports_a_capped_run():
     )
     body = client.post("/run", json=RUN_PAYLOAD).json()
     assert body["stop_reason"] == "max_turns"
+
+
+# --------------------------------------------------------------------------- #
+# F15 — file access is confined to the corpus
+# --------------------------------------------------------------------------- #
+async def _decide(gate, tool="Read", **inp):
+    return await gate(tool, inp, ToolPermissionContext())
+
+
+@pytest.fixture
+def corpus_gate(tmp_path):
+    return rag.make_corpus_gate(tmp_path)
+
+
+@pytest.mark.anyio
+async def test_reads_inside_the_corpus_are_allowed(corpus_gate, tmp_path):
+    """The shapes the CLI actually sends: absolute, relative, and no path."""
+    for inp in (
+        {"file_path": str(tmp_path / "notes.md")},          # absolute, inside
+        {"file_path": "notes.md"},                          # relative to cwd
+        {"path": str(tmp_path)},                            # Grep/Glob scope
+        {"path": "."},                                      # the corpus itself
+        {"pattern": "ReAct"},                               # Grep with no path
+    ):
+        d = await _decide(corpus_gate, **inp)
+        assert isinstance(d, PermissionResultAllow), inp
+
+
+@pytest.mark.anyio
+async def test_reading_the_projects_own_env_is_refused(corpus_gate):
+    """The attack that worked, before this gate existed.
+
+    A live agent asked to read this project's `.env` did so and reported
+    success — that file holds the gateway key. A Q&A endpoint that will read
+    arbitrary server files on request is a credential-disclosure primitive, and
+    "read /path/to/.env" is the entire technique.
+    """
+    d = await _decide(corpus_gate, file_path="/etc/passwd")
+    assert isinstance(d, PermissionResultDeny)
+    assert "outside the document corpus" in d.message
+    assert d.interrupt is False
+
+
+@pytest.mark.anyio
+async def test_traversal_and_sibling_paths_are_refused(corpus_gate, tmp_path):
+    for raw in ("../secrets.env", "../../etc/passwd", str(tmp_path.parent / "x.md")):
+        assert isinstance(await _decide(corpus_gate, file_path=raw), PermissionResultDeny), raw
+
+
+@pytest.mark.anyio
+async def test_symlink_out_of_the_corpus_is_refused(tmp_path):
+    outside, corpus = tmp_path / "outside", tmp_path / "corpus"
+    outside.mkdir(); corpus.mkdir()
+    try:
+        (corpus / "link").symlink_to(outside, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks not permitted on this host")
+    d = await _decide(rag.make_corpus_gate(corpus), file_path="link/secrets.env")
+    assert isinstance(d, PermissionResultDeny)
+
+
+@pytest.mark.anyio
+async def test_every_path_argument_spelling_is_checked(corpus_gate):
+    """Read says file_path, Grep/Glob say path. Missing one leaves a hole."""
+    for key in rag.PATH_ARGS:
+        d = await _decide(corpus_gate, **{key: "/etc/passwd"})
+        assert isinstance(d, PermissionResultDeny), key
+
+
+def test_file_tools_are_not_auto_approved():
+    """`allowed_tools` entries auto-approve before the callback runs (F11)."""
+    assert rag.RAG_TOOLS, "the agent still needs its tools via tools="
+
+
+@pytest.mark.anyio
+async def test_run_installs_the_gate_and_does_not_shadow_it():
+    seen = {}
+
+    async def spy(prompt, options) -> AgentResult:
+        seen.update(gate=options.can_use_tool, mode=options.permission_mode,
+                    allowed=options.allowed_tools, tools=options.tools)
+        return AgentResult(text="ok")
+
+    await answer("q", Settings(), spy)
+
+    assert seen["gate"] is not None
+    assert seen["mode"] == "default"
+    assert seen["allowed"] == [], "any entry here would bypass the gate"
+    assert set(seen["tools"]) == {"Grep", "Glob", "Read"}

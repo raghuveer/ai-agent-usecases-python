@@ -75,6 +75,7 @@ async def send_customer_message(args: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_approval_server():
+    """The MCP server carrying the guarded `send_customer_message` tool."""
     return create_sdk_mcp_server(
         name="approval", version="1.0.0", tools=[send_customer_message]
     )
