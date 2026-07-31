@@ -374,6 +374,42 @@ Ollama, no gateway — surfaced four things the usual configuration hides:
     half-working sandbox is worse than an absent one that reports itself. In a
     container, the container is the boundary.
 
+## Found while closing out F10 (2026-07-31)
+
+23. **Gating a tool does not gate a capability.** `make_workdir_gate` sends every
+    `Write`/`Edit` through `can_use_tool` and refuses paths resolving outside the
+    workdir — `..` and symlinks included. It works. Then the adversarial test:
+    a task instructing the agent to save its work to `/tmp`.
+
+    The gate refused the write. The agent's next line was:
+
+    > *"Let me use the Bash tool to create these files instead"*
+
+    `/tmp/solution.py` existed afterwards. Bash has to stay auto-approved — it is
+    how the tests get run — and it can redirect anywhere the process can write.
+    Denying one tool changed the route, not the destination, and it took the
+    model one turn to find it. No injection technique was involved; it was just
+    the obvious next move.
+
+    A shell-command allow-list is not the fix: `python -c` alone defeats it, and
+    shipping one would be the F9/F11/F14 mistake again — something shaped like a
+    boundary that is not one. So the gate ships for the accidental case (live
+    runs repeatedly saw the model pick `/tmp` unprompted) and **F10 stays open**;
+    the container requirement is unchanged.
+
+    Worth noting the run stayed honest throughout: `files: []`, `tests_passed:
+    false`, because artefacts are read only from the workdir. The bypass
+    succeeded and the API did not report success.
+
+    Measured, gate vs no gate on the same benign task: **6 turns / $0.24** with
+    it, against 10 turns / $0.55 before — no regression. The adversarial run cost
+    13 turns / $0.70 fighting it, which is the gate doing its job.
+
+    9 offline tests (one skips on hosts without symlink permission). The SDK also
+    warns about this shape directly — `CanUseToolShadowedWarning: can_use_tool
+    will not be invoked for: Read, Bash, Glob` — which is worth reading as the
+    design statement it is, not noise to silence.
+
 ## Dependency: chromadb CVE-2026-45829 (assessed 2026-07-31)
 
 Two critical Dependabot alerts (`langchain/01-rag`, `langgraph/01-rag`).
@@ -394,6 +430,6 @@ Re-open if these examples ever switch to Chroma's client/server mode.
 
 ## Status
 - **10/10 use cases × 4 approaches = 40 projects built.**
-- `claude-agent-sdk`: **176 offline unit tests green**. **All 14 integration tests verified live and passing — all 10 use cases.** Two live passes found 8 defects plus 1 test bug; every one is fixed, and the security-relevant ones (F10, F11, F14) are in `docs/security-review.md`.
+- `claude-agent-sdk`: **183 offline unit tests green**. **All 14 integration tests verified live and passing — all 10 use cases.** Two live passes found 8 defects plus 1 test bug; every one is fixed, and the security-relevant ones (F10, F11, F14) are in `docs/security-review.md`.
 - raw-api / langchain / langgraph: re-pointed at `:8094` and **all 30 live-run 2026-07-30 — 30/30 passing** (18 free-local, 12 cloud). The sweep found one defect (finding 11 above) affecting 6 projects.
-- **Running total: 22 findings recorded; 21 of them surfaced by *running* the code, not by testing it.** The exception is finding 18 (`stop_reason` never reaching a response), which was found by reading. Across both the agent-SDK build and the older 30. Three — F9, F11, F14 — were security controls that were accepted, configured correctly, and simply did not take effect.
+- **Running total: 23 findings recorded; 22 of them surfaced by *running* the code, not by testing it.** The exception is finding 18 (`stop_reason` never reaching a response), which was found by reading. Across both the agent-SDK build and the older 30. Three — F9, F11, F14 — were security controls that were accepted, configured correctly, and simply did not take effect.

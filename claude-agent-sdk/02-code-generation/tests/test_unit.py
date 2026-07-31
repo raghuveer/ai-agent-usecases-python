@@ -16,6 +16,12 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from claude_agent_sdk import (
+    PermissionResultAllow,
+    PermissionResultDeny,
+    ToolPermissionContext,
+)
+
 from app import codegen
 from app.agent import AgentResult, ToolCall
 from app.codegen import generate, sandbox_settings, sandbox_supported
@@ -161,8 +167,10 @@ async def test_agent_is_confined_to_the_workdir_and_offline_tools():
         assert options.cwd is not None
         assert "WebFetch" not in options.allowed_tools
         assert "WebSearch" not in options.allowed_tools
-        assert set(options.allowed_tools) >= {"Write", "Bash"}
-        assert options.permission_mode == "acceptEdits"
+        # Write and Edit are available (`tools=`) but not auto-approved, so the
+        # workdir gate sees them — see the F10 section below.
+        assert set(options.tools) >= {"Write", "Bash"}
+        assert "Bash" in options.allowed_tools
         return AgentResult(text="ok")
 
     await generate("task", Settings(), spy)
@@ -346,3 +354,101 @@ async def test_run_wires_the_sandbox_and_the_stderr_observer_together():
     assert out.sandboxed is False
     if sandbox_supported():
         assert "feature gate off" in out.sandbox_note
+
+
+# --------------------------------------------------------------------------- #
+# F10 — writes are confined to the workdir by a permission gate
+# --------------------------------------------------------------------------- #
+async def _decide(gate, tool: str, **inp):
+    return await gate(tool, inp, ToolPermissionContext())
+
+
+@pytest.fixture
+def gate(tmp_path):
+    return codegen.make_workdir_gate(tmp_path)
+
+
+@pytest.mark.anyio
+async def test_relative_writes_are_allowed(gate):
+    for name in ("solution.py", "test_solution.py", "pkg/mod.py"):
+        d = await _decide(gate, "Write", file_path=name, content="x")
+        assert isinstance(d, PermissionResultAllow), name
+
+
+@pytest.mark.anyio
+async def test_absolute_write_outside_the_workdir_is_refused(gate):
+    """The escape live runs actually attempted: `/tmp/solution.py`.
+
+    `cwd` does not stop it — the Write tool takes absolute paths — and the
+    prompt asking for relative names is guidance, not a boundary.
+    """
+    d = await _decide(gate, "Write", file_path="/tmp/solution.py", content="x")
+    assert isinstance(d, PermissionResultDeny)
+    assert "outside the working directory" in d.message
+    # Not interrupted: the agent should fix the path and keep going.
+    assert d.interrupt is False
+
+
+@pytest.mark.anyio
+async def test_traversal_out_of_the_workdir_is_refused(gate):
+    d = await _decide(gate, "Write", file_path="../escaped.py", content="x")
+    assert isinstance(d, PermissionResultDeny)
+
+
+@pytest.mark.anyio
+async def test_symlink_out_of_the_workdir_is_refused(tmp_path):
+    """`resolve()` follows links, so a link planted inside cannot be a way out."""
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    workdir = tmp_path / "work"
+    workdir.mkdir()
+    try:
+        (workdir / "link").symlink_to(outside, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks not permitted on this host")
+    d = await _decide(codegen.make_workdir_gate(workdir), "Write",
+                      file_path="link/escaped.py", content="x")
+    assert isinstance(d, PermissionResultDeny)
+
+
+@pytest.mark.anyio
+async def test_edit_is_gated_too_and_other_tools_pass_through(gate):
+    assert isinstance(
+        await _decide(gate, "Edit", file_path="/etc/passwd"), PermissionResultDeny
+    )
+    for tool in ("Read", "Glob", "Bash"):
+        assert isinstance(await _decide(gate, tool, command="ls"), PermissionResultAllow)
+
+
+@pytest.mark.anyio
+async def test_write_without_a_path_is_refused(gate):
+    assert isinstance(await _decide(gate, "Write", content="x"), PermissionResultDeny)
+
+
+def test_write_tools_are_not_auto_approved():
+    """The F11 lesson, asserted rather than remembered.
+
+    Naming a tool in `allowed_tools` auto-approves it *before* `can_use_tool`
+    runs. If Write or Edit ever reappears there, the gate above silently stops
+    running and every test in this section still passes.
+    """
+    assert set(codegen.WRITE_TOOLS).isdisjoint(codegen.CODEGEN_AUTO_APPROVED)
+    assert set(codegen.CODEGEN_AUTO_APPROVED) <= set(codegen.CODEGEN_TOOLS)
+
+
+@pytest.mark.anyio
+async def test_run_installs_the_gate_and_does_not_shadow_it():
+    seen = {}
+
+    async def spy(prompt, options) -> AgentResult:
+        seen["gate"] = options.can_use_tool
+        seen["mode"] = options.permission_mode
+        seen["allowed"] = options.allowed_tools
+        return AgentResult(text="done")
+
+    await generate("write add(a, b)", Settings(), spy)
+
+    assert seen["gate"] is not None
+    # "acceptEdits" would auto-accept writes before the gate is consulted.
+    assert seen["mode"] == "default"
+    assert "Write" not in seen["allowed"] and "Edit" not in seen["allowed"]

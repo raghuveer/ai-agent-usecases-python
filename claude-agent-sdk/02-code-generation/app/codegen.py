@@ -49,6 +49,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from claude_agent_sdk import (
+    PermissionResultAllow,
+    PermissionResultDeny,
+    ToolPermissionContext,
+)
+
 from .agent import AgentResult, Runner, build_options, default_runner, outcome_of
 from .settings import Settings
 
@@ -70,6 +76,16 @@ Stop as soon as the tests pass, and say so."""
 
 # Built-in tools only — no custom tools needed, which is itself the point.
 CODEGEN_TOOLS = ["Write", "Read", "Edit", "Bash", "Glob"]
+
+# The tools that create files, and therefore the ones the workdir gate inspects.
+WRITE_TOOLS = ("Write", "Edit")
+
+# Deliberately NOT the same list. Anything named here is auto-approved *before*
+# `can_use_tool` is consulted — the shadowing that made the UC10 approval gate
+# fail open (F11). Write and Edit are omitted so every file write reaches
+# :func:`make_workdir_gate`; they are still available, because availability
+# comes from `tools=`, not from this list.
+CODEGEN_AUTO_APPROVED = ["Read", "Bash", "Glob"]
 
 SOLUTION = "solution.py"
 TESTS = "test_solution.py"
@@ -174,6 +190,85 @@ def sandbox_settings(settings: Settings) -> dict[str, Any] | None:
     }
 
 
+def _resolve_under(root: Path, raw: str) -> Path:
+    """Where ``raw`` would actually land, relative paths taken from ``root``."""
+    candidate = Path(raw)
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    # resolve() collapses `..` *and* follows symlinks, so a link planted inside
+    # the workdir cannot be used to land outside it.
+    return candidate.resolve()
+
+
+def make_workdir_gate(workdir: Path):
+    """Confine file writes to ``workdir`` (F10 in docs/security-review.md).
+
+    ``cwd`` sets where the agent *starts*, not where it may write: the ``Write``
+    tool accepts absolute paths, and live runs repeatedly saw the model choose
+    ``/tmp/solution.py``. The prompt says "relative filenames only" and the
+    artefact reader only looks in the workdir, but neither is a boundary — the
+    file still got written.
+
+    This is one, and it is portable in a way the OS sandbox is not: it runs in
+    process, on every platform, and needs no bubblewrap. ``can_use_tool`` sees
+    every ``Write``/``Edit`` before it happens, and a path that resolves outside
+    the workdir is refused.
+
+    **It does not close F10, and the reason is worth knowing.** Asked outright
+    to save its work to ``/tmp``, a live agent hit this gate, was refused — and
+    simply picked another tool:
+
+        *"Let me use the Bash tool to create these files instead"*
+
+    ``/tmp/solution.py`` existed afterwards. **Gating a tool does not gate a
+    capability.** Bash is auto-approved (it has to run the tests) and can
+    redirect anywhere the process can write, so denying ``Write`` only changes
+    the route, not the destination. An allow-list of shell commands would not
+    fix it either: ``python -c`` alone defeats any such list, and shipping one
+    would be this repo's recurring mistake — a control that looks like a
+    boundary and is not.
+
+    What this *is* worth: it removes the accidental case, which is the common
+    one — live runs repeatedly saw the model choose ``/tmp`` unprompted — and it
+    keeps the result honest, because artefacts are read only from the workdir.
+    The deliberate case still needs a real boundary: the OS sandbox, and failing
+    that the container.
+    """
+    root = workdir.resolve()
+
+    async def can_use_tool(
+        tool_name: str,
+        input_data: dict[str, Any],
+        context: ToolPermissionContext,
+    ) -> PermissionResultAllow | PermissionResultDeny:
+        if tool_name not in WRITE_TOOLS:
+            return PermissionResultAllow(updated_input=input_data)
+
+        raw = input_data.get("file_path") or input_data.get("path")
+        if not raw:
+            # A write tool with no path is malformed; refusing beats guessing.
+            return PermissionResultDeny(
+                message=f"{tool_name} needs a file_path.", interrupt=False
+            )
+
+        target = _resolve_under(root, str(raw))
+        if target == root or not target.is_relative_to(root):
+            # Denied without `interrupt`: the agent should correct its path and
+            # carry on, not have the run killed. The message is the correction.
+            return PermissionResultDeny(
+                message=(
+                    f"Refused: {raw!r} is outside the working directory. Write to "
+                    f"a bare relative filename such as {SOLUTION!r} — the current "
+                    "directory is already a private scratch directory."
+                ),
+                interrupt=False,
+            )
+
+        return PermissionResultAllow(updated_input=input_data)
+
+    return can_use_tool
+
+
 class SandboxMonitor:
     """Believes the CLI, not the config.
 
@@ -225,11 +320,15 @@ async def generate(
         options = build_options(
             settings,
             system_prompt=SYSTEM_PROMPT,
-            allowed_tools=CODEGEN_TOOLS,
+            allowed_tools=CODEGEN_AUTO_APPROVED,
             tools=CODEGEN_TOOLS,
             cwd=str(workdir),
-            # Edits are auto-accepted: the agent owns this throwaway directory.
-            permission_mode="acceptEdits",
+            # NOT "acceptEdits": that auto-accepts every write before the gate
+            # runs, which is the same shadowing as listing a tool in
+            # `allowed_tools` (F11). "default" sends the undecided tools —
+            # Write and Edit — to `can_use_tool`.
+            permission_mode="default",
+            can_use_tool=make_workdir_gate(workdir),
             sandbox=sandbox,
             # Not logging — this is how the CLI reports that it could not honour
             # the sandbox. See SandboxMonitor.

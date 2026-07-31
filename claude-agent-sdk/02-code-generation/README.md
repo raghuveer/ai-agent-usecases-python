@@ -65,8 +65,27 @@ sometimes not, which made results flaky. Two mitigations:
 2. Artefacts are only read back from the workdir, so anything written outside it
    does not count as output and `tests_passed` stays `false`.
 
-Neither is a security boundary. So the SDK's own `sandbox` is applied too, and
-it is **on by default** here.
+Neither is a security boundary. Two more mitigations now apply, and between them
+they say something useful about what agent permissions can and cannot do.
+
+**A workdir gate on `Write`/`Edit`.** Every file write goes through
+`can_use_tool`, and a path resolving outside the workdir is refused — `..` and
+symlinks included. `Write`/`Edit` are deliberately *not* in `allowed_tools`,
+because naming a tool there auto-approves it before the callback runs. This is
+portable in a way the OS sandbox is not: in-process, every platform.
+
+**And it is not enough, which is the interesting part.** Asked outright to save
+its work to `/tmp`, a live agent hit the gate, was refused, and answered:
+
+> *"Let me use the Bash tool to create these files instead"*
+
+`/tmp/solution.py` existed afterwards. **Gating a tool does not gate a
+capability.** Bash has to stay auto-approved — it runs the tests — and it writes
+wherever the process can. A shell allow-list would not close it either; `python
+-c` alone defeats one. So the gate earns its place against the *accidental*
+case, which is the common one, and the deliberate case still needs a real
+boundary — which is what the SDK's `sandbox` is for, applied next, and **on by
+default** here.
 
 ## The shell is sandboxed by default (F9)
 

@@ -11,7 +11,7 @@ Every approach here solves an identical task with identical tools. What differs 
 | [`raw-api`](../../raw-api/02-code-generation) | 256 | `app/codegen.py::generate` | You write the control flow; every byte sent is visible at the call site. |
 | [`langchain`](../../langchain/02-code-generation) | 311 | `app/codegen.py::generate` | Composition helpers do the plumbing; the control flow is still yours. |
 | [`langgraph`](../../langgraph/02-code-generation) | 284 | `app/codegen.py::build_codegen_graph` | State and control flow become a typed graph. |
-| [`claude-agent-sdk`](../../claude-agent-sdk/02-code-generation) | 447 | `app/codegen.py::generate` | The SDK owns the loop; you supply tools and a prompt. |
+| [`claude-agent-sdk`](../../claude-agent-sdk/02-code-generation) | 514 | `app/codegen.py::generate` | The SDK owns the loop; you supply tools and a prompt. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
 
@@ -205,11 +205,15 @@ async def generate(
         options = build_options(
             settings,
             system_prompt=SYSTEM_PROMPT,
-            allowed_tools=CODEGEN_TOOLS,
+            allowed_tools=CODEGEN_AUTO_APPROVED,
             tools=CODEGEN_TOOLS,
             cwd=str(workdir),
-            # Edits are auto-accepted: the agent owns this throwaway directory.
-            permission_mode="acceptEdits",
+            # NOT "acceptEdits": that auto-accepts every write before the gate
+            # runs, which is the same shadowing as listing a tool in
+            # `allowed_tools` (F11). "default" sends the undecided tools —
+            # Write and Edit — to `can_use_tool`.
+            permission_mode="default",
+            can_use_tool=make_workdir_gate(workdir),
             sandbox=sandbox,
             # Not logging — this is how the CLI reports that it could not honour
             # the sandbox. See SandboxMonitor.

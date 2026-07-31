@@ -247,7 +247,7 @@ guarded exception, and it is unit-tested with an injection payload.
 | # | Finding | Severity | Framework | Status |
 |---|---|---|---|---|
 | **F9** | **Shell execution enabled by default** in `02-code-generation` | 🟠 Medium (was 🔴 High) | LLM05/LLM06, A03 | **Sandboxed by default** (2026-07-31); residual risk where the OS cannot sandbox |
-| **F10** | `cwd` does **not** confine agent file writes | 🟠 Medium | LLM06, A01 | Mitigated (prompt + read-back), not solved |
+| **F10** | `cwd` does **not** confine agent file writes | 🟠 Medium | LLM06, A01 | **Write/Edit gated to the workdir** (2026-07-31); still open — the agent routes around it via `Bash` |
 | **F11** | Human-approval gate fails **open** on a config mistake | 🟠 Medium | LLM06 | **Fixed** + regression test |
 | **F12** | Parked HITL runs have no TTL or eviction | 🟡 Low | LLM10 | **Fixed** — deny-on-timeout reaper + capacity cap |
 | **F13** | Agent runtime depends on an external CLI resolved from `PATH` | 🟡 Low | LLM03, A08 | Documented |
@@ -301,6 +301,32 @@ mandates bare relative filenames and forbids absolute paths, and artefacts are
 read back only from the workdir (so out-of-workdir writes never count as output
 and `tests_passed` stays false). Neither is a boundary — the process can still
 write anywhere its user can.
+
+**Partially mitigated 2026-07-31, and the failed half is the instructive one.**
+`make_workdir_gate` now puts every `Write`/`Edit` through `can_use_tool` and
+refuses any path resolving outside the workdir — `..` and symlinks included,
+since it compares resolved paths. `Write`/`Edit` are deliberately absent from
+`allowed_tools`, because naming a tool there auto-approves it before the
+callback runs (the F11 shadowing bug). Unlike the OS sandbox this is portable:
+in-process, every platform, no bubblewrap.
+
+It does **not** close the finding. Told outright to save its work to `/tmp`, a
+live agent hit the gate, was refused, and picked another tool —
+
+> *"Let me use the Bash tool to create these files instead"*
+
+— and `/tmp/solution.py` existed afterwards. **Gating a tool does not gate a
+capability.** Bash must stay auto-approved to run the tests, and it can redirect
+anywhere the process can write. A shell-command allow-list would not help: a
+bare `python -c` defeats any such list, and shipping one would repeat the exact
+mistake catalogued in F9/F11/F14 — a control that resembles a boundary without
+being one.
+
+So the gate is worth having for the *accidental* case, which is the common one,
+and the run stays honest when it is bypassed (`files: []`, `tests_passed:
+false`). The *deliberate* case still requires a real boundary: the OS sandbox,
+and failing that the container. **F10 stays open at Medium** — the container
+requirement in §11.5 is not relaxed by this.
 
 **F11 — the approval gate could fail open.** In `10-hitl-approval`, listing the
 guarded tool in `allowed_tools` **auto-approves it before `can_use_tool` is
@@ -380,7 +406,10 @@ Live-run findings.
   `setting_sources=[]` so local settings cannot shadow the gate (F11).
 - ~~Add a TTL/reaper for parked approvals~~ — **now built in** (`APPROVAL_TTL_SECONDS` / `APPROVAL_MAX_PENDING`); still run UC10 as a **single worker** (F12).
 - **Pin `cli_path`** and control `PATH` where the runtime is untrusted (F13).
-- **Treat `cwd` as ergonomics, not isolation** (F10).
+- **Treat `cwd` as ergonomics, not isolation** (F10). The workdir gate refuses
+  `Write`/`Edit` outside it, but a live agent answered a refusal by switching to
+  `Bash` and writing there anyway. Assume any tool an agent holds can reach any
+  effect another of its tools can.
 - **Set `CLAUDE_CONFIG_DIR` to a throwaway directory** — `setting_sources=[]`
   alone does **not** detach developer memory or a parent `CLAUDE.md` (F14).
 - Keep the per-run `max_turns` / `max_budget_usd` caps — they are the only thing
