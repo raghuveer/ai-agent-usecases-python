@@ -28,7 +28,7 @@ from typing import Any, Literal
 from claude_agent_sdk import create_sdk_mcp_server, tool
 from pydantic import BaseModel, Field, ValidationError
 
-from .agent import Runner, build_options, default_runner
+from .agent import Runner, build_options, default_runner, outcome_of
 from .settings import Settings
 
 Category = Literal["billing", "technical", "shipping", "account", "other"]
@@ -139,6 +139,7 @@ class TriageResult:
     order_lookups: list[str]
     num_turns: int
     cost_usd: float
+    stop_reason: str = "end_turn"
 
 
 async def triage(
@@ -169,6 +170,7 @@ async def triage(
             order_lookups=lookups,
             num_turns=result.num_turns,
             cost_usd=result.cost_usd,
+            stop_reason=outcome_of(result),
         )
 
     try:
@@ -183,6 +185,7 @@ async def triage(
             order_lookups=lookups,
             num_turns=result.num_turns,
             cost_usd=result.cost_usd,
+            stop_reason=outcome_of(result),
         )
 
     return TriageResult(
@@ -192,4 +195,5 @@ async def triage(
         order_lookups=lookups,
         num_turns=result.num_turns,
         cost_usd=result.cost_usd,
+        stop_reason=outcome_of(result),
     )

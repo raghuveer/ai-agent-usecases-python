@@ -38,7 +38,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from .agent import AgentResult, Runner, build_options, default_runner
+from .agent import AgentResult, Runner, build_options, default_runner, outcome_of
 from .settings import Settings
 
 SYSTEM_PROMPT = """You are a Python engineer working in the current directory.
@@ -76,6 +76,7 @@ class CodegenResult:
     tool_calls: list[str]
     num_turns: int
     cost_usd: float
+    stop_reason: str = "end_turn"
 
 
 def _ran_tests_successfully(result: AgentResult, workdir: Path) -> bool:
@@ -127,6 +128,7 @@ async def generate(
             tool_calls=result.tool_names,
             num_turns=result.num_turns,
             cost_usd=result.cost_usd,
+            stop_reason=outcome_of(result),
         )
     finally:
         if not keep_workdir:

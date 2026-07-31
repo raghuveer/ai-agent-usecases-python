@@ -11,7 +11,7 @@ Every approach here solves an identical task with identical tools. What differs 
 | [`raw-api`](../../raw-api/04-research-agent) | 413 | `app/agent.py::run_agent` | You write the control flow; every byte sent is visible at the call site. |
 | [`langchain`](../../langchain/04-research-agent) | 483 | `app/agent.py::run_agent` | Composition helpers do the plumbing; the control flow is still yours. |
 | [`langgraph`](../../langgraph/04-research-agent) | 455 | `app/agent.py::build_agent_graph` | State and control flow become a typed graph. |
-| [`claude-agent-sdk`](../../claude-agent-sdk/04-research-agent) | 348 | `app/research.py::research` | The SDK owns the loop; you supply tools and a prompt. |
+| [`claude-agent-sdk`](../../claude-agent-sdk/04-research-agent) | 363 | `app/research.py::research` | The SDK owns the loop; you supply tools and a prompt. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
 
@@ -340,6 +340,7 @@ async def research(
         tools_used=result.tool_names,
         num_turns=result.num_turns,
         cost_usd=result.cost_usd,
+        stop_reason=outcome_of(result),
     )
 ```
 

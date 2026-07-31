@@ -27,7 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from .agent import Runner, build_options, default_runner
+from .agent import Runner, build_options, default_runner, outcome_of
 from .settings import Settings
 
 CORPUS_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -71,6 +71,7 @@ class ResearchResult:
     tools_used: list[str]
     num_turns: int
     cost_usd: float
+    stop_reason: str = "end_turn"
 
 
 def _citations_from(tool_calls) -> list[str]:
@@ -128,4 +129,5 @@ async def research(
         tools_used=result.tool_names,
         num_turns=result.num_turns,
         cost_usd=result.cost_usd,
+        stop_reason=outcome_of(result),
     )

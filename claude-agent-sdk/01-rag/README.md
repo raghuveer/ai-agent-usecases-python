@@ -45,7 +45,7 @@ findings. Everything is local, so this runs air-gapped.
 - `GET /health` → `{"status":"ok","approach":"claude-agent-sdk","usecase":"01-rag"}`
 - `POST /run` body `{"question": str}` →
   `{"answer": str, "sources": [str], "searches": [str], "num_turns": int,
-    "cost_usd": float}`
+    "cost_usd": float, "stop_reason": str}`
 
 ## Env vars (`.env.example`)
 

@@ -11,7 +11,7 @@ Every approach here solves an identical task with identical tools. What differs 
 | [`raw-api`](../../raw-api/03-data-extraction) | 252 | `app/extract.py::extract_invoice` | One call plus a validating parser — and a retry that tells the model what was wrong. |
 | [`langchain`](../../langchain/03-data-extraction) | 329 | `app/extract.py::extract_invoice` | Structured output is a first-class chain concern. |
 | [`langgraph`](../../langgraph/03-data-extraction) | 261 | `app/extract.py::build_extract_graph` | Extract → validate → repair is a genuine pipeline, so nodes earn their keep. |
-| [`claude-agent-sdk`](../../claude-agent-sdk/03-data-extraction) | 360 | `app/extract.py::extract` | An agent harness doing a one-shot job: no loop ever runs. |
+| [`claude-agent-sdk`](../../claude-agent-sdk/03-data-extraction) | 376 | `app/extract.py::extract` | An agent harness doing a one-shot job: no loop ever runs. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
 
@@ -195,12 +195,14 @@ async def extract(
             errors=["agent did not call emit_invoice"],
             num_turns=result.num_turns,
             cost_usd=result.cost_usd,
+            stop_reason=outcome_of(result),
         )
 
     # If the agent called it more than once, the last call is its final answer.
     out = _validate(calls[-1].input)
     out.num_turns = result.num_turns
     out.cost_usd = result.cost_usd
+    out.stop_reason = outcome_of(result)
     return out
 ```
 

@@ -79,13 +79,19 @@ gate to be three lines inside the agent you already have, use this.
 
 - `GET /health` → `{"status":"ok","approach":"claude-agent-sdk","usecase":"10-hitl-approval"}`
 - `POST /run` body `{"request": str}` →
-  `{"run_id": str, "status": "awaiting_approval", "proposed_action": str}`
-  (or `status: "completed_without_approval"` if the agent never reached the
-  guarded tool)
+  `{"run_id": str, "status": "awaiting_approval", "proposed_action": str,
+  "stop_reason": null}`
+  (or `status: "completed_without_approval"` with a real `stop_reason` if the
+  agent never reached the guarded tool)
 - `POST /resume` body `{"run_id": str, "approved": bool, "feedback": str|null}` →
-  approved → `{"status":"executed","result": ...}`;
-  not approved → `{"status":"rejected","result": null}`;
+  approved → `{"status":"executed","result": ..., "stop_reason":"end_turn"}`;
+  not approved → `{"status":"rejected","result": null, "stop_reason":"denied"}`;
   unknown, already-resumed, or timed-out `run_id` → **404**.
+
+`stop_reason` is the only field here that can legitimately be `null`, and the
+null is the interesting part: a parked run has not stopped. Every other use case
+in this repo answers "why did it end"; this one can answer "it hasn't". Once a
+run resumes it is always set — `end_turn`, `denied`, or a cap.
 
 `POST /run` returns **429** when `APPROVAL_MAX_PENDING` runs are already parked.
 

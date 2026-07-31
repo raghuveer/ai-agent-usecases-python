@@ -48,7 +48,7 @@ quietly passed through. If the agent never emits a decision, that is reported as
 - `GET /orders` → the stand-in order system the lookup tool reads
 - `POST /run` body `{"ticket": str}` →
   `{"valid": bool, "decision": {...}|null, "errors": [str],
-    "order_lookups": [str], "num_turns": int, "cost_usd": float}`
+    "order_lookups": [str], "num_turns": int, "cost_usd": float, "stop_reason": str}`
 
 ## Env vars (`.env.example`)
 

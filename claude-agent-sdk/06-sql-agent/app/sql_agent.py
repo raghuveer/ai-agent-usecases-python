@@ -26,7 +26,7 @@ from typing import Any
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
 from . import db
-from .agent import Runner, build_options, default_runner
+from .agent import Runner, build_options, default_runner, outcome_of
 from .settings import Settings
 
 # Resolved once at import; tools close over it.
@@ -113,6 +113,7 @@ class SqlResult:
     tools_used: list[str]
     num_turns: int
     cost_usd: float
+    stop_reason: str = "end_turn"
 
 
 async def ask(
@@ -139,4 +140,5 @@ async def ask(
         tools_used=[c.name.split("__")[-1] for c in result.tool_calls],
         num_turns=result.num_turns,
         cost_usd=result.cost_usd,
+        stop_reason=outcome_of(result),
     )

@@ -11,7 +11,7 @@ Every approach here solves an identical task with identical tools. What differs 
 | [`raw-api`](../../raw-api/05-support-triage) | 278 | `app/triage.py::triage` | You write the control flow; every byte sent is visible at the call site. |
 | [`langchain`](../../langchain/05-support-triage) | 307 | `app/triage.py::triage` | Composition helpers do the plumbing; the control flow is still yours. |
 | [`langgraph`](../../langgraph/05-support-triage) | 278 | `app/triage.py::build_triage_graph` | State and control flow become a typed graph. |
-| [`claude-agent-sdk`](../../claude-agent-sdk/05-support-triage) | 402 | `app/triage.py::triage` | The SDK owns the loop; you supply tools and a prompt. |
+| [`claude-agent-sdk`](../../claude-agent-sdk/05-support-triage) | 419 | `app/triage.py::triage` | The SDK owns the loop; you supply tools and a prompt. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
 
@@ -180,6 +180,7 @@ async def triage(
             order_lookups=lookups,
             num_turns=result.num_turns,
             cost_usd=result.cost_usd,
+            stop_reason=outcome_of(result),
         )
 
     try:
@@ -194,6 +195,7 @@ async def triage(
             order_lookups=lookups,
             num_turns=result.num_turns,
             cost_usd=result.cost_usd,
+            stop_reason=outcome_of(result),
         )
 
     return TriageResult(
@@ -203,6 +205,7 @@ async def triage(
         order_lookups=lookups,
         num_turns=result.num_turns,
         cost_usd=result.cost_usd,
+        stop_reason=outcome_of(result),
     )
 ```
 

@@ -54,7 +54,7 @@ So: vendor-neutral today, one small adapter away from any viewer tomorrow.
   },
   "outcome": {
     "status": "ok",                   // ok | capped | error
-    "stop_reason": "final_answer",    // final_answer | max_steps | max_turns | max_budget | error
+    "stop_reason": "final_answer",    // final_answer | max_steps | max_turns | max_budget | max_tokens | error
     "steps": 3,
     "tool_calls": 2,
     "cost_usd": null                  // null when the endpoint does not report cost
@@ -88,6 +88,15 @@ So: vendor-neutral today, one small adapter away from any viewer tomorrow.
 reports token usage but not price; only the Agent SDK reports real cost. Reporting
 a confident `0.0` for an unpriced run would be a lie, and the runs where it matters
 most are the expensive ones.
+
+`stop_reason` is a **shared** vocabulary, not a passthrough. Three approaches own
+their loop and naturally speak it — `final_answer`, `max_steps`. The Agent SDK
+does not: it reports Anthropic's own reasons, `end_turn` and `max_tokens`. Those
+are translated on the way into the trace (`trace.to_trace_reason`), because a
+comparison table whose rows say `final_answer` in three approaches and `end_turn`
+in the fourth is comparing spelling, not behaviour. The untranslated value is
+still available — each Agent SDK project returns it as `stop_reason` in its own
+HTTP response, where being faithful to the SDK is the more useful choice.
 
 ## Where it is implemented
 

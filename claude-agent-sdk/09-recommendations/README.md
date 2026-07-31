@@ -38,7 +38,7 @@ it becomes a real one. If you only need ranking, `raw-api/09` is one HTTP call.
 - `GET /profiles` → the stand-in profile store
 - `POST /run` body `{"user_id": str}` →
   `{"valid": bool, "items": [{"id","name","category","price","reason"}],
-    "rationale": str, "errors": [str], "num_turns": int, "cost_usd": float}`
+    "rationale": str, "errors": [str], "num_turns": int, "cost_usd": float, "stop_reason": str}`
 
 ## Env vars (`.env.example`)
 

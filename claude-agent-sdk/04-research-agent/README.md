@@ -45,7 +45,7 @@ findings.
 - `GET /health` → `{"status":"ok","approach":"claude-agent-sdk","usecase":"04-research-agent","mode":"offline"|"web"}`
 - `POST /run` body `{"question": str}` →
   `{"answer": str, "mode": str, "citations": [str], "searches": [str],
-    "tools_used": [str], "num_turns": int, "cost_usd": float}`
+    "tools_used": [str], "num_turns": int, "cost_usd": float, "stop_reason": str}`
 
 ## Env vars (`.env.example`)
 

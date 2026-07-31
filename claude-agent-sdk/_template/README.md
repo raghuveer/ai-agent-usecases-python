@@ -85,7 +85,7 @@ and every live test spends a small, capped amount of budget.
 
 - `GET /health` → `{"status":"ok","approach":"claude-agent-sdk","usecase":"_template"}`
 - `POST /run` body `{"question": str}` →
-  `{"answer": str, "tools_used": [str], "num_turns": int, "cost_usd": float}`
+  `{"answer": str, "tools_used": [str], "num_turns": int, "cost_usd": float, "stop_reason": str}`
 
 ## Env vars (`.env.example`)
 

@@ -44,7 +44,7 @@ clones stay reproducible and no binary lands in git). Three tables — `customer
 - `GET /schema` → tables and columns
 - `POST /run` body `{"question": str}` →
   `{"answer": str, "queries": [str], "tools_used": [str], "num_turns": int,
-    "cost_usd": float}`
+    "cost_usd": float, "stop_reason": str}`
 
 `queries` is the SQL the agent actually executed — the audit trail for its answer.
 

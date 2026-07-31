@@ -11,7 +11,7 @@ Every approach here solves an identical task with identical tools. What differs 
 | [`raw-api`](../../raw-api/08-autonomous-react) | 840 | `app/react.py::run_react` | You write the loop, the parser, and the stop condition. |
 | [`langchain`](../../langchain/08-autonomous-react) | 797 | `app/react.py::run_react` | The framework supplies tools and message types; the loop is still yours. |
 | [`langgraph`](../../langgraph/08-autonomous-react) | 836 | `app/react.py::build_react_graph` | The loop becomes a graph: nodes, a conditional edge, and a cycle. |
-| [`claude-agent-sdk`](../../claude-agent-sdk/08-autonomous-react) | 636 | `app/react_agent.py::run_react` | There is no loop in the repo. The SDK owns it. |
+| [`claude-agent-sdk`](../../claude-agent-sdk/08-autonomous-react) | 668 | `app/react_agent.py::run_react` | There is no loop in the repo. The SDK owns it. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
 
@@ -189,6 +189,7 @@ async def run_react(
         ],
         num_turns=result.num_turns,
         cost_usd=result.cost_usd,
+        stop_reason=outcome_of(result),
         hit_turn_limit=result.stop_reason == "max_turns",
     )
 ```

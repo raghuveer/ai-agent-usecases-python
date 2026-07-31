@@ -55,7 +55,7 @@ can. For untrusted input, use a container/VM or the SDK's `sandbox` setting.
 - `GET /health` → `{"status":"ok","approach":"claude-agent-sdk","usecase":"02-code-generation"}`
 - `POST /run` body `{"task": str}` →
   `{"solution": str, "tests": str, "summary": str, "tests_passed": bool,
-    "files": [str], "tools_used": [str], "num_turns": int, "cost_usd": float}`
+    "files": [str], "tools_used": [str], "num_turns": int, "cost_usd": float, "stop_reason": str}`
 
 ## Env vars (`.env.example`)
 

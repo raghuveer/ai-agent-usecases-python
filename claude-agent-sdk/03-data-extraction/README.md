@@ -50,7 +50,7 @@ Per this repo's model policy, extraction defaults to a cloud model
 - `GET /schema` → the tool schema that doubles as the extraction contract
 - `POST /run` body `{"document": str}` →
   `{"valid": bool, "invoice": {...}|null, "errors": [str], "num_turns": int,
-    "cost_usd": float}`
+    "cost_usd": float, "stop_reason": str}`
 
 `data/sample-invoice.txt` is a runnable example document.
 

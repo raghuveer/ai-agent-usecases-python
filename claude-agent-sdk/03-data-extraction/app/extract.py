@@ -31,7 +31,7 @@ from typing import Any
 from claude_agent_sdk import create_sdk_mcp_server, tool
 from pydantic import BaseModel, Field, ValidationError
 
-from .agent import Runner, build_options, default_runner
+from .agent import Runner, build_options, default_runner, outcome_of
 from .settings import Settings
 
 
@@ -114,6 +114,7 @@ class ExtractResult:
     errors: list[str] = field(default_factory=list)
     num_turns: int = 0
     cost_usd: float = 0.0
+    stop_reason: str = "end_turn"
 
 
 def _validate(payload: dict[str, Any]) -> ExtractResult:
@@ -150,10 +151,12 @@ async def extract(
             errors=["agent did not call emit_invoice"],
             num_turns=result.num_turns,
             cost_usd=result.cost_usd,
+            stop_reason=outcome_of(result),
         )
 
     # If the agent called it more than once, the last call is its final answer.
     out = _validate(calls[-1].input)
     out.num_turns = result.num_turns
     out.cost_usd = result.cost_usd
+    out.stop_reason = outcome_of(result)
     return out

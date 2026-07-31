@@ -16,7 +16,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
-from .agent import Runner, build_options, default_runner
+from .agent import Runner, build_options, default_runner, outcome_of
 from .settings import get_settings
 
 APPROACH = "claude-agent-sdk"
@@ -37,6 +37,7 @@ class RunResponse(BaseModel):
     tools_used: list[str]
     num_turns: int
     cost_usd: float
+    stop_reason: str
 
 
 def create_app(runner: Runner | None = None) -> FastAPI:
@@ -60,6 +61,7 @@ def create_app(runner: Runner | None = None) -> FastAPI:
             tools_used=result.tool_names,
             num_turns=result.num_turns,
             cost_usd=result.cost_usd,
+            stop_reason=outcome_of(result),
         )
 
     return app

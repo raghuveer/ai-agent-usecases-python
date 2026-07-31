@@ -43,7 +43,7 @@ exceptions, so the agent can correct itself instead of the run dying.
 - `GET /metrics` → the fixed warehouse the agent must query through tools
 - `POST /run` body `{"question": str}` →
   `{"answer": str, "steps": [{"tool": str, "input": {...}}], "num_turns": int,
-    "cost_usd": float, "hit_turn_limit": bool, "trace": object|null}`
+    "cost_usd": float, "stop_reason": str, "hit_turn_limit": bool, "trace": object|null}`
 - `POST /run?trace=1` — same, with `trace` populated. See below.
 
 > **Renamed in v0.5.0.** The tool-call list moved from `trace` to `steps`, freeing

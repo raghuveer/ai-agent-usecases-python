@@ -56,6 +56,35 @@ NOT_CAPTURED = [
 ]
 
 
+# The trace vocabulary is deliberately cross-approach (see docs/trace-format.md):
+# raw-api / langchain / langgraph own their loops and report `final_answer` or
+# `max_steps`. The SDK speaks Anthropic's vocabulary instead -- `end_turn`,
+# `max_tokens` -- so it is translated here rather than leaked into the trace.
+# Leaking it would silently make this approach's runs incomparable with the
+# other three, which is the one thing the shared format exists to prevent.
+_TRACE_REASONS = {
+    "end_turn": "final_answer",
+    "stop_sequence": "final_answer",
+    "tool_use": "final_answer",
+}
+
+
+def to_trace_reason(sdk_reason: str) -> str:
+    """Map an SDK stop reason onto the shared trace vocabulary.
+
+    Unknown reasons pass through unchanged: `max_turns`, `max_budget`,
+    `max_tokens` and `error` already mean the same thing in both vocabularies.
+    """
+    return _TRACE_REASONS.get(sdk_reason, sdk_reason)
+
+
+def status_for(trace_reason: str) -> str:
+    """The `status` implied by a stop reason: ok | capped | error."""
+    if trace_reason == "final_answer":
+        return "ok"
+    return "capped" if trace_reason.startswith("max_") else "error"
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 

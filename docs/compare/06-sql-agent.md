@@ -11,7 +11,7 @@ Every approach here solves an identical task with identical tools. What differs 
 | [`raw-api`](../../raw-api/06-sql-agent) | 274 | `app/sqlagent.py::answer` | You write the control flow; every byte sent is visible at the call site. |
 | [`langchain`](../../langchain/06-sql-agent) | 319 | `app/sqlagent.py::answer_question` | Composition helpers do the plumbing; the control flow is still yours. |
 | [`langgraph`](../../langgraph/06-sql-agent) | 285 | `app/sqlagent.py::build_sql_graph` | State and control flow become a typed graph. |
-| [`claude-agent-sdk`](../../claude-agent-sdk/06-sql-agent) | 471 | `app/sql_agent.py::ask` | The SDK owns the loop; you supply tools and a prompt. |
+| [`claude-agent-sdk`](../../claude-agent-sdk/06-sql-agent) | 486 | `app/sql_agent.py::ask` | The SDK owns the loop; you supply tools and a prompt. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
 
@@ -156,6 +156,7 @@ async def ask(
         tools_used=[c.name.split("__")[-1] for c in result.tool_calls],
         num_turns=result.num_turns,
         cost_usd=result.cost_usd,
+        stop_reason=outcome_of(result),
     )
 ```
 

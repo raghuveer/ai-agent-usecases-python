@@ -49,7 +49,7 @@ Three use cases were run live against the gateway (UC02, UC08, UC10). **Every on
 
 1. **`can_use_tool` requires streaming input.** Passing a string prompt while a permission callback is set raises `ValueError: can_use_tool callback requires streaming mode`. `default_runner` now wraps the prompt in an `AsyncIterable` when a gate is present.
 2. **`allowed_tools` silently shadows the permission gate.** Listing the guarded tool there auto-approves it *before* `can_use_tool` is consulted — the agent sent the message with no approval. The SDK emits `CanUseToolShadowedWarning`. UC10 now passes `allowed_tools=[]`; the tool is still available via its MCP server (that list controls auto-approval, not availability).
-3. **Turn/budget caps raise, they do not return.** Exhausting `max_turns` / `max_budget_usd` raises from `query()` instead of yielding a `ResultMessage`, so `stop_reason` handling never ran. `default_runner` maps those two messages back to `stop_reason="max_turns"` / `"max_budget"`; genuine errors still propagate.
+3. **Turn/budget caps can raise instead of returning.** *(Refined 2026-07-31 — see finding 18: they sometimes return a `ResultMessage` carrying `stop_reason` and a real cost. Both paths occur; both are handled. As first written this said caps never return, which is too strong.)* Exhausting `max_turns` / `max_budget_usd` may raise from `query()` instead of yielding a `ResultMessage`, in which case `stop_reason` handling never ran. `default_runner` maps those two messages back to `stop_reason="max_turns"` / `"max_budget"`; genuine errors still propagate.
 4. **A denial with `interrupt=True` surfaces as an error result.** For UC10 that is the expected terminal state, so `resolve_run` translates it into a rejection — but only on the denied path.
 5. **`cwd` is not a sandbox.** The `Write` tool accepts absolute paths, and the model repeatedly wrote to `/tmp/solution.py` instead of the workdir, making UC02 flaky. Mitigated by an explicit relative-paths-only instruction plus reading artefacts back only from the workdir. Not a security boundary — a container/VM or the SDK `sandbox` setting is.
 6. **Prompt caching does not pass through the gateway** (`cache_read_input_tokens: 0`), so every agent turn re-pays the full Claude Code harness prompt. Measured: ~847 input tokens for a *trivial* one-shot call, and **$0.35–0.48 for a 9–10 turn code-gen run** on `claude-haiku`. The original `$0.25` cap was exhausted in 15 seconds. Defaults raised to `AGENT_MAX_TURNS=12`, `AGENT_MAX_BUDGET_USD=1.00`.
@@ -214,8 +214,65 @@ Ollama, no gateway — surfaced four things the usual configuration hides:
     chunks, first at 1.30s of an 8.48s run**. Before the fix it would have been
     one chunk at the end.
 
+## Closing finding 12 properly (2026-07-31)
+
+18. **A capped run kept its partial work but never said it was partial.**
+    Finding 12 made the accumulated text, tool calls and turn count survive a
+    cap. It stopped one step short: `AgentResult.stop_reason` was populated in
+    all 11 agent-SDK projects and read by **none** of them. Every response was
+    built from `.text`, `.num_turns` and `.cost_usd` only, so a run cut off at
+    `max_turns` still answered **200 with a plausible-looking partial answer** —
+    the exact failure mode this repo keeps rediscovering: not an error, a
+    believable value.
+
+    It showed up differently per use case, all of them quiet:
+
+    | use case | what a capped run looked like before |
+    |---|---|
+    | 01, 04, 06 | a short answer that reads as complete |
+    | 03, 05, 09 | `valid: false`, "agent did not call emit_x" — blaming the agent for a cap |
+    | 02 | missing files reported as an empty solution |
+    | 07 | an empty report; the trace *guessed* `max_turns` for any early stop |
+    | 08 | `hit_turn_limit` covered the turn cap only — a budget cap read as `ok` |
+    | 10 | a rejected send indistinguishable from a failed one |
+
+    Fixed by adding `outcome_of()` to the shared `agent.py`: the raw SDK field
+    stays truthful (nullable, exactly what the SDK reported) and the normalised
+    reason goes in the response, so callers get one field that is always present
+    and always means something. `end_turn` fills the gap where the SDK reports
+    nothing — a null reason arrives precisely when the run was fine, which is
+    the least useful moment for a caller to have to guess.
+
+    **The vocabulary split is the interesting part.** The HTTP response returns
+    the SDK's own reason; the *trace* translates it (`to_trace_reason`) into the
+    cross-approach vocabulary in `docs/trace-format.md`. Leaking `end_turn` into
+    a trace whose other three rows say `final_answer` would have made the
+    comparison tables compare spelling instead of behaviour — and comparison is
+    what the trace format exists for.
+
+    UC10 is the deliberate exception: `stop_reason` is nullable there, and the
+    null carries meaning. A run parked at the approval gate has not stopped, so
+    no reason is the honest answer. Every other use case can only report why a
+    run ended; this one can report that it hasn't.
+
+    23 regression tests: two per project, plus three for UC10's gate states. Each
+    was mutation-checked — removing the plumbing fails the capped-run test.
+
+    **Live-verified on `01-rag`, and it corrected finding 3.** A normal run
+    returns `end_turn` (7 turns, $0.115). Re-run with `AGENT_MAX_TURNS=2` it
+    returns `max_turns` — with `cost_usd: 0.0466`, which means a `ResultMessage`
+    *did* arrive. Finding 3 recorded that caps "raise, they do not return"; that
+    is true of some cap paths but not this one. The SDK does both, and the code
+    already handled both, so nothing needed changing — but the note was too
+    absolute and is corrected here.
+
+    The capped answer began *"I'll search the documents for information about
+    Qwen models, ReAct loops, and coder models…"* — indistinguishable, without
+    this field, from a run that was about to finish properly. That is the whole
+    argument for the change in one line of output.
+
 ## Status
 - **10/10 use cases × 4 approaches = 40 projects built.**
-- `claude-agent-sdk`: **131 offline unit tests green**. **All 14 integration tests verified live and passing — all 10 use cases.** Two live passes found 8 defects plus 1 test bug; every one is fixed, and the security-relevant ones (F10, F11, F14) are in `docs/security-review.md`.
+- `claude-agent-sdk`: **166 offline unit tests green**. **All 14 integration tests verified live and passing — all 10 use cases.** Two live passes found 8 defects plus 1 test bug; every one is fixed, and the security-relevant ones (F10, F11, F14) are in `docs/security-review.md`.
 - raw-api / langchain / langgraph: re-pointed at `:8094` and **all 30 live-run 2026-07-30 — 30/30 passing** (18 free-local, 12 cloud). The sweep found one defect (finding 11 above) affecting 6 projects.
 - **Running total: 10 defects found by live runs that mocked tests could not see**, across both the agent-SDK build and the older 30.

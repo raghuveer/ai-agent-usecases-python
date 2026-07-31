@@ -55,7 +55,7 @@ controlling spend anyway — the budget cap is the one that actually bounds cost
 - `GET /team` → the roster: each subagent's description and tool allow-list
 - `POST /run` body `{"question": str}` →
   `{"report": str, "subagents_used": [str], "tools_used": [str],
-    "num_turns": int, "cost_usd": float}`
+    "num_turns": int, "cost_usd": float, "stop_reason": str}`
 
 `subagents_used` is read back out of the `Agent` tool calls, so it reflects what
 the lead *actually* delegated, not what it was told to do.

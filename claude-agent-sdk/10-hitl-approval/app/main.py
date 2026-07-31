@@ -19,7 +19,7 @@ from fastapi.responses import StreamingResponse
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from .agent import Runner, build_options
+from .agent import Runner, build_options, outcome_of
 from .approval import (
     iter_resume_run,
     iter_start_run,
@@ -53,6 +53,11 @@ class RunResponse(BaseModel):
     run_id: str
     status: str
     proposed_action: str
+    # Null while the run is parked at the gate — and that is the point. Every
+    # other use case here reports why a run *ended*; this one can be alive and
+    # waiting, which is a state a stop reason cannot describe. It is filled in
+    # only when the agent finished without ever reaching the guarded tool.
+    stop_reason: str | None = None
 
 
 class ResumeRequest(BaseModel):
@@ -65,6 +70,10 @@ class ResumeResponse(BaseModel):
     status: str
     result: str | None = None
     feedback: str | None = None
+    # Always set: by the time a run resumes it has terminated one way or another
+    # — ``end_turn`` after an approved send, ``denied`` when the human refused
+    # (a denial interrupts the run; see approval.resolve_run), or a cap.
+    stop_reason: str = "end_turn"
 
 
 def _sse(event: dict) -> str:
@@ -197,6 +206,7 @@ def create_app(runner: Runner | None = None) -> FastAPI:
             return RunResponse(
                 run_id=run_id, status="completed_without_approval",
                 proposed_action=finished.text,
+                stop_reason=outcome_of(finished),
             )
 
         return RunResponse(
@@ -215,8 +225,17 @@ def create_app(runner: Runner | None = None) -> FastAPI:
         app.state.registry.discard(req.run_id)  # terminal: no second resume
 
         if req.approved:
-            return ResumeResponse(status="executed", result=result.text)
-        return ResumeResponse(status="rejected", result=None, feedback=req.feedback)
+            return ResumeResponse(
+                status="executed",
+                result=result.text,
+                stop_reason=outcome_of(result),
+            )
+        return ResumeResponse(
+            status="rejected",
+            result=None,
+            feedback=req.feedback,
+            stop_reason=outcome_of(result),
+        )
 
     return app
 

@@ -314,3 +314,45 @@ async def test_reaper_is_cancelled_when_a_run_resolves_normally():
     await asyncio.sleep(0.15)  # past the TTL
     assert pending.expired is False
     assert pending.decision.result() is True
+
+
+# --------------------------------------------------------------------------- #
+# stop_reason -- three terminal states, plus one that is not terminal at all
+# --------------------------------------------------------------------------- #
+def test_stop_reason_is_null_while_parked_at_the_gate():
+    """The state no other use case has. A parked run has not stopped, so there
+    is no honest reason to report -- null says "still alive", which is exactly
+    what a caller polling this endpoint needs to know."""
+    with TestClient(make_app()) as client:
+        body = client.post("/run", json={"request": "approve a $40 refund"}).json()
+    assert body["status"] == "awaiting_approval"
+    assert body["stop_reason"] is None
+
+
+def test_stop_reason_reports_a_run_that_never_reached_the_gate():
+    with TestClient(make_app(call_guarded=False)) as client:
+        body = client.post("/run", json={"request": "just say hi"}).json()
+    assert body["status"] == "completed_without_approval"
+    assert body["stop_reason"] == "end_turn"
+
+
+def test_stop_reason_distinguishes_approved_from_denied():
+    """A denial interrupts the run, so the SDK reports it as an error result.
+    `denied` names the human decision that caused it -- without this the caller
+    sees an empty answer and cannot tell refusal from failure."""
+    with TestClient(make_app()) as client:
+        run_id = client.post("/run", json={"request": "refund"}).json()["run_id"]
+        approved = client.post(
+            "/resume", json={"run_id": run_id, "approved": True}
+        ).json()
+    assert approved["status"] == "executed"
+    assert approved["stop_reason"] == "end_turn"
+
+    with TestClient(make_app()) as client:
+        run_id = client.post("/run", json={"request": "refund"}).json()["run_id"]
+        rejected = client.post(
+            "/resume",
+            json={"run_id": run_id, "approved": False, "feedback": "too much"},
+        ).json()
+    assert rejected["status"] == "rejected"
+    assert rejected["stop_reason"] == "denied"

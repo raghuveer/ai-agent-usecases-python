@@ -26,7 +26,7 @@ from typing import Any
 from claude_agent_sdk import create_sdk_mcp_server, tool
 from pydantic import BaseModel, Field, ValidationError
 
-from .agent import Runner, build_options, default_runner
+from .agent import Runner, build_options, default_runner, outcome_of
 from .settings import Settings
 
 PROFILES: dict[str, dict[str, Any]] = {
@@ -182,6 +182,7 @@ class RecoResult:
     errors: list[str]
     num_turns: int
     cost_usd: float
+    stop_reason: str = "end_turn"
 
 
 async def recommend(
@@ -206,6 +207,7 @@ async def recommend(
             errors=["agent did not call emit_recommendations"],
             num_turns=result.num_turns,
             cost_usd=result.cost_usd,
+            stop_reason=outcome_of(result),
         )
 
     try:
@@ -220,6 +222,7 @@ async def recommend(
             ],
             num_turns=result.num_turns,
             cost_usd=result.cost_usd,
+            stop_reason=outcome_of(result),
         )
 
     # Ground the output: every id must exist in the real catalog. A hallucinated
@@ -233,6 +236,7 @@ async def recommend(
             errors=[f"recommended ids not in catalog: {', '.join(unknown)}"],
             num_turns=result.num_turns,
             cost_usd=result.cost_usd,
+            stop_reason=outcome_of(result),
         )
 
     by_id = {i["id"]: i for i in CATALOG}
@@ -253,4 +257,5 @@ async def recommend(
         errors=[],
         num_turns=result.num_turns,
         cost_usd=result.cost_usd,
+        stop_reason=outcome_of(result),
     )

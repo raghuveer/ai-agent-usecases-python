@@ -178,3 +178,43 @@ async def test_genuine_errors_still_propagate(monkeypatch):
     monkeypatch.setattr(agent_mod, "query", fake_query)
     with pytest.raises(Exception, match="connection refused"):
         await agent_mod.default_runner("task", ClaudeAgentOptions())
+
+
+# --------------------------------------------------------------------------- #
+# stop_reason -- a capped run must be distinguishable from a complete one
+# --------------------------------------------------------------------------- #
+RUN_PAYLOAD = {"task": "write add(a, b)"}
+
+
+def _stub_runner(**fields):
+    """A runner that returns exactly the AgentResult it is handed."""
+
+    async def runner(prompt, options) -> AgentResult:
+        return AgentResult(**fields)
+
+    return runner
+
+
+def test_stop_reason_reports_a_completed_run():
+    """The SDK reports no stop reason on several paths, so the field would be
+    null exactly when the run was fine. `end_turn` fills that gap: callers get
+    one field that is always present and always means something."""
+    client = TestClient(create_app(runner=_stub_runner(text="done", num_turns=1)))
+    body = client.post("/run", json=RUN_PAYLOAD).json()
+    assert body["stop_reason"] == "end_turn"
+
+
+def test_stop_reason_reports_a_capped_run():
+    """The gap this closes. A run cut short by `max_turns` still answers 200
+    with whatever it managed to produce -- previously indistinguishable from a
+    run that finished properly, which is the one thing a caller must be able to
+    tell apart."""
+    client = TestClient(
+        create_app(
+            runner=_stub_runner(
+                text="partial", num_turns=8, is_error=True, stop_reason="max_turns"
+            )
+        )
+    )
+    body = client.post("/run", json=RUN_PAYLOAD).json()
+    assert body["stop_reason"] == "max_turns"

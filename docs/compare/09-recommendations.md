@@ -11,7 +11,7 @@ Every approach here solves an identical task with identical tools. What differs 
 | [`raw-api`](../../raw-api/09-recommendations) | 243 | `app/recommend.py::recommend` | You write the control flow; every byte sent is visible at the call site. |
 | [`langchain`](../../langchain/09-recommendations) | 305 | `app/recommend.py::recommend` | Composition helpers do the plumbing; the control flow is still yours. |
 | [`langgraph`](../../langgraph/09-recommendations) | 242 | `app/recommend.py::build_recommend_graph` | State and control flow become a typed graph. |
-| [`claude-agent-sdk`](../../claude-agent-sdk/09-recommendations) | 458 | `app/recommend.py::recommend` | The SDK owns the loop; you supply tools and a prompt. |
+| [`claude-agent-sdk`](../../claude-agent-sdk/09-recommendations) | 476 | `app/recommend.py::recommend` | The SDK owns the loop; you supply tools and a prompt. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
 
@@ -149,6 +149,7 @@ async def recommend(
             errors=["agent did not call emit_recommendations"],
             num_turns=result.num_turns,
             cost_usd=result.cost_usd,
+            stop_reason=outcome_of(result),
         )
 
     try:
@@ -163,6 +164,7 @@ async def recommend(
             ],
             num_turns=result.num_turns,
             cost_usd=result.cost_usd,
+            stop_reason=outcome_of(result),
         )
 
     # Ground the output: every id must exist in the real catalog. A hallucinated
@@ -176,6 +178,7 @@ async def recommend(
             errors=[f"recommended ids not in catalog: {', '.join(unknown)}"],
             num_turns=result.num_turns,
             cost_usd=result.cost_usd,
+            stop_reason=outcome_of(result),
         )
 
     by_id = {i["id"]: i for i in CATALOG}
@@ -196,6 +199,7 @@ async def recommend(
         errors=[],
         num_turns=result.num_turns,
         cost_usd=result.cost_usd,
+        stop_reason=outcome_of(result),
     )
 ```
 

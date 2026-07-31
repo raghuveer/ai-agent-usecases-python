@@ -204,6 +204,28 @@ def _cap_reason(message: str) -> str | None:
     return None
 
 
+# Callers need one field they can branch on. ``AgentResult.stop_reason`` mirrors
+# the SDK and is frequently ``None``: the CLI reports one on some paths only, and
+# a stubbed runner never sets it at all. A nullable field is precisely what a
+# caller cannot branch on -- which was the gap this closes. A capped run used to
+# return 200 with a partial answer and no signal that it was partial.
+#
+# Normalising here, rather than in the dataclass, keeps the raw SDK field
+# truthful while giving every HTTP response one field with exactly one meaning.
+def outcome_of(result: AgentResult) -> str:
+    """Why the run ended -- always a string, never ``None``.
+
+    Values seen in practice: ``end_turn`` (the agent finished on its own terms),
+    ``max_turns`` or ``max_budget`` (a cap this repo configures fired -- see
+    :data:`_CAP_MARKERS`), ``max_tokens`` (the reply was cut mid-sentence), and
+    ``error``. Anything the SDK reports passes through unchanged; only the
+    absence of a reason is interpreted.
+    """
+    if result.stop_reason:
+        return result.stop_reason
+    return "error" if result.is_error else "end_turn"
+
+
 async def stream_prompt(prompt: str) -> AsyncIterator[dict[str, Any]]:
     """Wrap a prompt as the SDK's streaming-input user message.
 

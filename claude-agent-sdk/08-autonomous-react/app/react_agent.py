@@ -30,7 +30,7 @@ from typing import Any
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
-from .agent import Runner, build_options, default_runner
+from .agent import Runner, build_options, default_runner, outcome_of
 from .settings import Settings
 
 # A tiny fixed "warehouse" so runs are deterministic and offline.
@@ -135,6 +135,7 @@ class ReactResult:
     num_turns: int
     cost_usd: float
     hit_turn_limit: bool
+    stop_reason: str = "end_turn"
 
 
 async def run_react(
@@ -158,5 +159,6 @@ async def run_react(
         ],
         num_turns=result.num_turns,
         cost_usd=result.cost_usd,
+        stop_reason=outcome_of(result),
         hit_turn_limit=result.stop_reason == "max_turns",
     )

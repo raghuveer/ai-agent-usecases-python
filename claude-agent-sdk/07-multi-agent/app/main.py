@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from .agent import Runner, build_options, iter_events
+from .agent import Runner, build_options, iter_events, outcome_of
 from . import trace as trace_mod
 from .settings import get_settings
 from .team import CORPUS_DIR, LEAD_PROMPT, TEAM, TEAM_TOOLS, run_team
@@ -32,6 +32,7 @@ class RunResponse(BaseModel):
     tools_used: list[str]
     num_turns: int
     cost_usd: float
+    stop_reason: str
     # Present only with `?trace=1`. Schema: docs/trace-format.md
     trace: dict[str, Any] | None = None
 
@@ -46,7 +47,10 @@ def _sse(event: dict) -> str:
             "report": result.text,
             "num_turns": result.num_turns,
             "cost_usd": result.cost_usd,
-            "stopped_reason": result.stop_reason or "final_answer",
+            # Mapped, not raw: the other three approaches end their stream with
+            # `final_answer` / `max_steps`, and a client watching all four should
+            # not have to special-case Anthropic's `end_turn` here.
+            "stopped_reason": trace_mod.to_trace_reason(outcome_of(result)),
         }
     return f"event: {name}\ndata: {json.dumps(payload)}\n\n"
 
@@ -128,9 +132,13 @@ def create_app(runner: Runner | None = None) -> FastAPI:
             )
             for name in out.tools_used:
                 tracer.tool_span(name=name, tool_input={})
+            # Was inferred from whether the report came back empty, which named
+            # "max_turns" for every early stop — including a budget cap or an
+            # error. The run now reports its own reason.
+            reason = trace_mod.to_trace_reason(out.stop_reason)
             doc = tracer.finish(
-                status="ok" if out.report.strip() else "capped",
-                stop_reason="final_answer" if out.report.strip() else "max_turns",
+                status=trace_mod.status_for(reason),
+                stop_reason=reason,
                 num_turns=out.num_turns,
                 cost_usd=out.cost_usd,
                 duration_ms=elapsed_ms,
@@ -144,6 +152,7 @@ def create_app(runner: Runner | None = None) -> FastAPI:
             tools_used=out.tools_used,
             num_turns=out.num_turns,
             cost_usd=out.cost_usd,
+            stop_reason=out.stop_reason,
             trace=doc if trace else None,
         )
 

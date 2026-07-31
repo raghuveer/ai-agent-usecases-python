@@ -29,6 +29,7 @@ class RunResponse(BaseModel):
     tools_used: list[str]
     num_turns: int
     cost_usd: float
+    stop_reason: str
 
 
 def create_app(runner: Runner | None = None) -> FastAPI:
@@ -54,6 +55,7 @@ def create_app(runner: Runner | None = None) -> FastAPI:
             tools_used=out.tool_calls,
             num_turns=out.num_turns,
             cost_usd=out.cost_usd,
+            stop_reason=out.stop_reason,
         )
 
     return app
