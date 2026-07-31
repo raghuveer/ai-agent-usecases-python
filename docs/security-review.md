@@ -255,6 +255,18 @@ guarded exception, and it is unit-tested with an injection payload.
 | **F15** | **Corpus agents read any file on the host**, including their own `.env` | 🔴 **High** | LLM02, LLM06, A01 | **Fixed** — `make_corpus_gate` in UC01/04/07; no shell here, so it holds |
 | **F16** | Order lookups **not scoped to the requester** — cross-customer disclosure | 🟠 Medium | LLM06, A01 | **Fixed** — `make_order_gate`, authority from the caller |
 | **F17** | Extracted totals were **never checked against the line items** | 🟡 Low | LLM05, LLM09 | **Fixed** — arithmetic validation in `Invoice` |
+| **F18** | `user_id` accepted free text and was **interpolated into the prompt** | 🟠 Medium | LLM01, A03 | **Fixed** — pattern-constrained at the edge, plus a profile gate |
+
+> **What these severities mean here.** These are teaching examples with fixture
+> data — two users called Ada and Grace, four orders, a seven-item catalog.
+> Nobody's customer data is at risk in `ORDERS = {"A-1001": …}`, and read as a
+> production audit these ratings would be inflated. They are rated as **patterns**,
+> because that is what the repository ships: code people clone. A tool scoped to
+> the system rather than the request costs nothing to demonstrate correctly and
+> is expensive to retrofit after it has been copied.
+>
+> One finding was not hypothetical. **F15 read a live `sk-aiup-…` key** out of a
+> developer's `.env`. That one crossed from example into actual.
 
 **F9 — shell execution on by default.** This is the sharpest difference from the
 v0.2.0 review. There, arbitrary code execution existed only behind
@@ -418,6 +430,26 @@ that found this, and "the model usually declines" is not a control. The `Invoice
 model now recomputes the line items and rejects a total that disagrees. The check
 does not care how a wrong number arrived: injection, hallucination, and a genuine
 misread all fail it identically.
+
+**F18 — an identifier field that accepted prose.** UC09's `user_id` carried only
+`max_length=64` and was interpolated straight into the prompt
+(`f"Recommend products for user {user_id}."`), so it was a prompt-injection
+channel wearing an identifier's name. A probe passing a whole paragraph as the id
+reached the model verbatim; it declined to leak the other profile, which was the
+model choosing well rather than a control holding.
+
+Fixed by constraining the field to the shape of an id
+(`^[A-Za-z0-9_-]{1,64}$`) at the route *and* at the function boundary, plus
+`make_profile_gate` scoping `get_profile` to the requested user for depth.
+
+**Worth naming what fixed it: not an agent-specific control.** Not a permission
+gate, not a system-prompt instruction, not a guardrail model — a regex, applied
+at the edge, of the kind every web application has had for thirty years. The
+injected request now returns **422 without a model call at all**, which is the
+cheapest rejection available. Agents add failure modes; they do not retire the
+old defences, and reaching for an agentic mitigation where input validation
+would do is how a codebase ends up with elaborate controls around a hole that
+should never have existed.
 
 **What held.** Three defences were probed and did not move: UC06's SQL guard
 (syntactic check *plus* a `mode=ro` connection — a write cannot pass the driver

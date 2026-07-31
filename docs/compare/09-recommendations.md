@@ -11,7 +11,7 @@ Every approach here solves an identical task with identical tools. What differs 
 | [`raw-api`](../../raw-api/09-recommendations) | 243 | `app/recommend.py::recommend` | You write the control flow; every byte sent is visible at the call site. |
 | [`langchain`](../../langchain/09-recommendations) | 305 | `app/recommend.py::recommend` | Composition helpers do the plumbing; the control flow is still yours. |
 | [`langgraph`](../../langgraph/09-recommendations) | 242 | `app/recommend.py::build_recommend_graph` | State and control flow become a typed graph. |
-| [`claude-agent-sdk`](../../claude-agent-sdk/09-recommendations) | 483 | `app/recommend.py::recommend` | The SDK owns the loop; you supply tools and a prompt. |
+| [`claude-agent-sdk`](../../claude-agent-sdk/09-recommendations) | 552 | `app/recommend.py::recommend` | The SDK owns the loop; you supply tools and a prompt. |
 
 Line counts are non-blank, non-comment lines across `app/`, and include each project's settings, HTTP layer, and tools — not just the loop. They are a rough proxy for how much surface you own, not a scoreboard.
 
@@ -135,13 +135,21 @@ async def recommend(
     Every returned id is checked against the real catalog before it
     leaves this function: a hallucinated product fails here rather than
     reaching a user.
+
+    Raises :class:`InvalidUserId` if `user_id` is not shaped like an id — see
+    :func:`validate_user_id` for why that check carries most of the weight here.
     """
+    user_id = validate_user_id(user_id)
     runner = runner or default_runner
     options = build_options(
         settings,
         system_prompt=SYSTEM_PROMPT,
-        allowed_tools=RECO_TOOLS,
+        # DELIBERATELY EMPTY — an entry here auto-approves before the gate runs.
+        allowed_tools=[],
+        tools=RECO_TOOLS,
         mcp_servers={"reco": build_reco_server()},
+        permission_mode="default",
+        can_use_tool=make_profile_gate(user_id),
         max_turns=max(settings.agent_max_turns, 6),
     )
     result = await runner(f"Recommend products for user {user_id}.", options)

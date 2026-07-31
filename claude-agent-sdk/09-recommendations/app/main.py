@@ -19,7 +19,13 @@ USECASE = "09-recommendations"
 
 
 class RunRequest(BaseModel):
-    user_id: str = Field(max_length=64)
+    # Constrained to the shape of an id, not merely to a length. This field is
+    # interpolated into the prompt, so `max_length=64` alone made it a
+    # prompt-injection channel wearing an identifier's name — a probe passing a
+    # paragraph here reached the model verbatim. FastAPI rejects a mismatch with
+    # 422 before any of this runs, which is the cheapest possible place to stop
+    # it. See `recommend.validate_user_id`.
+    user_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$", max_length=64)
 
 
 class RunResponse(BaseModel):

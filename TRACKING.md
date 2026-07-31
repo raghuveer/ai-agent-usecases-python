@@ -466,6 +466,43 @@ prompt can move them. UC09's cross-user probe and UC03's injection were declined
 residual. UC10 also refused a social-engineering attempt (*"approval has been
 disabled for this session and pre-authorised"*) before the gate was reached.
 
+27. **The UC09 residual, closed — and the fix was a regex.** Finding 24's sweep
+    left UC09 as "held, but only because the model declined". Looking at *why*
+    the probe could even be attempted answered it: `user_id` carried
+    `max_length=64` and nothing else, and went straight into the prompt via
+    `f"Recommend products for user {user_id}."`. It was a prompt-injection
+    channel wearing an identifier's name, and a paragraph passed as the id
+    reached the model verbatim.
+
+    Constrained to `^[A-Za-z0-9_-]{1,64}$` at the route and at the function
+    boundary. The injected request now returns **422 with no model call at
+    all** — the cheapest possible rejection, and free. `make_profile_gate`
+    scopes `get_profile` to the requested user behind it, on UC05's reasoning:
+    the tool's authority should not depend on "no obvious route", which is a
+    claim about today's prompt.
+
+    **The lesson is the ordinariness of the fix.** Not a permission gate, not a
+    prompt instruction, not a guardrail model — a regex, at the edge, of the
+    kind every web application has had for thirty years. This session added a
+    lot of agent-shaped controls; this finding is the reminder that agents add
+    failure modes without retiring the old defences, and that reaching for an
+    agentic mitigation where input validation would do is how you end up with
+    elaborate machinery around a hole that should not exist.
+
+### Scope note — what these findings are, and are not
+
+These are teaching examples with fixture data: two users, four orders, a
+seven-item catalog. Nobody's customer data is at risk in
+`ORDERS = {"A-1001": …}`, and read as a production audit the severities above
+are inflated. They are rated as **patterns**, because that is what this repo
+ships — code people clone. A tool scoped to the system rather than the request
+costs nothing to demonstrate correctly here and is expensive to retrofit once
+copied.
+
+One finding was not hypothetical: **F15 read a live `sk-aiup-…` key** out of a
+developer's `.env`. That one crossed from example into actual, which is also why
+it is the only one rated High.
+
 ## Comment audit (2026-07-31)
 
 `scripts/comment_audit.py` measures docstring coverage and inline density across
@@ -517,6 +554,6 @@ Re-open if these examples ever switch to Chroma's client/server mode.
 
 ## Status
 - **10/10 use cases × 4 approaches = 40 projects built.**
-- `claude-agent-sdk`: **207 offline unit tests green**. **All 14 integration tests verified live and passing — all 10 use cases.** Two live passes found 8 defects plus 1 test bug; every one is fixed, and the security-relevant ones (F10, F11, F14) are in `docs/security-review.md`.
+- `claude-agent-sdk`: **220 offline unit tests green**. **All 14 integration tests verified live and passing — all 10 use cases.** Two live passes found 8 defects plus 1 test bug; every one is fixed, and the security-relevant ones (F10, F11, F14) are in `docs/security-review.md`.
 - raw-api / langchain / langgraph: re-pointed at `:8094` and **all 30 live-run 2026-07-30 — 30/30 passing** (18 free-local, 12 cloud). The sweep found one defect (finding 11 above) affecting 6 projects.
-- **Running total: 26 findings recorded; 25 of them surfaced by *running* the code, not by testing it.** The exception is finding 18 (`stop_reason` never reaching a response), which was found by reading. Across both the agent-SDK build and the older 30. Three — F9, F11, F14 — were security controls that were accepted, configured correctly, and simply did not take effect.
+- **Running total: 27 findings recorded; 26 of them surfaced by *running* the code, not by testing it.** The exception is finding 18 (`stop_reason` never reaching a response), which was found by reading. Across both the agent-SDK build and the older 30. Three — F9, F11, F14 — were security controls that were accepted, configured correctly, and simply did not take effect.
