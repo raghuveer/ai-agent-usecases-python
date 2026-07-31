@@ -72,7 +72,25 @@ jobs:
         # and fails the build on any known vulnerability. The chromadb advisory is
         # ignored as an accepted residual: it is a server-side CVE with no published
         # fix, and these examples use chromadb in embedded mode (see docs/security-review.md).
-        run: >
-          uv run --with pip-audit pip-audit
-          --ignore-vuln GHSA-f4j7-r4q5-qw2c
-          --ignore-vuln CVE-2026-45829
+        #
+        # Retried because this step reaches pypi.org on all 44 jobs with a 15s read
+        # timeout, so one slow response reddens the whole build. It did: a
+        # docs-only commit failed on `ReadTimeout` and passed unchanged on re-run.
+        # A red badge that means "pypi was slow" teaches people to ignore red
+        # badges, which is worse than the flake.
+        #
+        # The retry cannot hide a real finding: a genuine vulnerability fails all
+        # three attempts and still fails the build. It only costs a vulnerable
+        # build ~30s longer to say so.
+        run: |
+          for attempt in 1 2 3; do
+            if uv run --with pip-audit pip-audit \
+                 --ignore-vuln GHSA-f4j7-r4q5-qw2c \
+                 --ignore-vuln CVE-2026-45829; then
+              exit 0
+            fi
+            echo "pip-audit attempt $attempt failed; retrying in $((attempt * 5))s"
+            sleep $((attempt * 5))
+          done
+          echo "pip-audit failed three times - treating as a real failure."
+          exit 1
