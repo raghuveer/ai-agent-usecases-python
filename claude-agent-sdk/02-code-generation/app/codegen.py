@@ -96,17 +96,41 @@ class CodegenResult:
     sandbox_note: str | None = None
 
 
+PYTEST_CACHE = ".pytest_cache"
+
+
 def _ran_tests_successfully(result: AgentResult, workdir: Path) -> bool:
     """Did the agent actually get a green run?
 
-    Deliberately conservative: both artefacts must exist *and* the agent must
-    have invoked Bash at least once (i.e. it really executed the tests rather
-    than just asserting they would pass), and the run must not have ended in an
-    error or a turn-limit stop.
+    Both artefacts must exist, the agent must have invoked Bash, **pytest must
+    have left its own cache directory in the workdir**, and the run must not
+    have ended in an error or a cap.
+
+    The ``.pytest_cache`` check exists because the rest was not enough. Running
+    this in a container with the shell sandboxed but bubblewrap unable to start,
+    every Bash call failed with ``bwrap: pivot_root: Operation not permitted``;
+    the agent retried eight times, gave up, reasoned about its own source, and
+    declared the implementation correct. This function returned **True** — it
+    had asked whether Bash was *invoked*, never whether it *worked*, and the
+    docstring's promise that the agent "really executed the tests rather than
+    just asserting they would pass" was exactly what failed to hold.
+
+    ``.pytest_cache`` is written by pytest itself, in the directory it ran in,
+    so it is evidence from the tool rather than a claim from the agent.
+
+    **What it still cannot prove is that the tests passed.** ``lastfailed``
+    survives a subsequent green run when test ids change, so it is not a usable
+    signal, and the only authoritative check — running the tests here — would
+    execute model-written code *outside* the sandbox the agent's own shell runs
+    in, trading a real boundary for a better status field. So this stays
+    evidence-based: it now proves the tests ran, and it no longer mistakes an
+    agent that never ran them for one that did.
     """
     if not (workdir / SOLUTION).exists() or not (workdir / TESTS).exists():
         return False
     if "Bash" not in result.tool_names:
+        return False
+    if not (workdir / PYTEST_CACHE).is_dir():
         return False
     return not result.is_error and result.stop_reason != "max_turns"
 

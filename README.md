@@ -13,7 +13,7 @@ Ten common agent use cases, each implemented **four ways** — direct **Raw API*
 
 **Other languages:** a TypeScript edition (LangChain.js + LangGraph.js) is planned at `ai-agent-usecases-typescript` _(coming soon)_.
 
-> **Status — v0.7.2:** all 10 use cases built across all 4 approaches (40 projects + a `_template/` per approach), each with offline, mocked **unit tests** and gated **integration tests**. **611 unit tests green repo-wide, and all 40 projects verified live** — then re-verified against the committed lockfiles, so what you install is what was tested. Run any of it with **`docker compose up`** (no key, no account), see what an agent actually did with **`?trace=1`**, and watch it work with **`POST /run/stream`** — both on the three use cases where an agent loops, delegates or pauses (UC07, UC08, UC10, all four approaches). Live runs have caught **18 bugs the mocked tests could not see** — a permission gate that failed *open*; `setting_sources=[]` silently failing to stop the developer's private `~/.claude` memory leaking into agent context; a sandbox the runtime had quietly declined to apply while the API still reported it as active; a capped agent run discarding everything it had already produced; and three separate gateway limitations (`stop` arrays, streaming, prompt caching). All fixed or documented, each with a regression test. See `TRACKING.md` → Live-run findings. **Security-reviewed** against NIST · OWASP LLM Top 10 · OWASP Web Top 10 (see [`docs/security-review.md`](docs/security-review.md) / [`SECURITY.md`](SECURITY.md)); dependencies patched to current majors, with a CI `pip-audit` gate and Dependabot keeping them current. Examples optimise for clarity of the approach, not production hardening.
+> **Status — v0.7.2:** all 10 use cases built across all 4 approaches (40 projects + a `_template/` per approach), each with offline, mocked **unit tests** and gated **integration tests**. **612 unit tests green repo-wide, and all 40 projects verified live** — then re-verified against the committed lockfiles, so what you install is what was tested. Run any of it with **`docker compose up`** (no key, no account), see what an agent actually did with **`?trace=1`**, and watch it work with **`POST /run/stream`** — both on the three use cases where an agent loops, delegates or pauses (UC07, UC08, UC10, all four approaches). Live runs have caught **21 bugs the mocked tests could not see** — a code-generation agent reporting `tests_passed: true` after a sandbox blocked every test it tried to run, leaving it to declare its own code correct by reading it; a permission gate that failed *open*; `setting_sources=[]` silently failing to stop the developer's private `~/.claude` memory leaking into agent context; a sandbox the runtime had quietly declined to apply while the API still reported it as active; a capped agent run discarding everything it had already produced; and three separate gateway limitations (`stop` arrays, streaming, prompt caching). All fixed or documented, each with a regression test. See `TRACKING.md` → Live-run findings. **Security-reviewed** against NIST · OWASP LLM Top 10 · OWASP Web Top 10 (see [`docs/security-review.md`](docs/security-review.md) / [`SECURITY.md`](SECURITY.md)); dependencies patched to current majors, with a CI `pip-audit` gate and Dependabot keeping them current. Examples optimise for clarity of the approach, not production hardening.
 
 > 🔴 **Read [`docs/security-review.md` §11](docs/security-review.md) before deploying anything from `claude-agent-sdk/`.** That approach has a materially larger blast radius than the other three: `02-code-generation` grants the agent a **shell by default** (remote code execution by design, driven by untrusted request text), and `cwd` was empirically shown **not** to confine file writes. Bandit and pip-audit are clean on it (0 High/Medium, no known CVEs). **That shell is now sandboxed by default** — no network, and no way for a command to opt itself out — which drops F9 from High to Medium. It is not closed: the SDK sandboxes bash on macOS/Linux only, so every `/run` response reports `sandboxed`, observed from the CLI rather than assumed from config. Treat `sandboxed: false` as "nothing here is contained", and run it in a real container/VM regardless — the OS sandbox is defence in depth, not a replacement.
 
@@ -143,10 +143,31 @@ latency — add `?trace=1`. That is implemented on the **UC08** projects today
 see [`docs/trace-format.md`](docs/trace-format.md) and the
 [UC08 comparison](docs/compare/08-autonomous-react.md).
 
-> Covers the three OpenAI-surface approaches. **`claude-agent-sdk` is not in the
-> Docker path**: it speaks the Anthropic Messages API and spawns the Claude Code
-> CLI, so it needs Node plus a real Anthropic-compatible endpoint. Run those
-> projects directly — each README explains the prerequisites.
+### `claude-agent-sdk` in Docker
+
+The command above covers the three OpenAI-surface approaches, which run against
+a local Ollama with no key. The Agent SDK cannot — small local models cannot
+drive the Claude Code harness — so it has its own compose file and needs a real
+endpoint and key:
+
+```bash
+PROJECT=claude-agent-sdk/01-rag LLM_GATEWAY_KEY=sk-... \
+  docker compose -f docker-compose.agent-sdk.yml up --build
+```
+
+**It needs no Node and no `npm install -g @anthropic-ai/claude-code`** — this
+README used to say otherwise. The SDK's wheel is platform-tagged and ships the
+CLI as a native binary, and the committed lockfiles carry the manylinux wheels,
+so `uv sync --locked` is the entire install. Verified in the built image:
+`claude --version` → `2.1.220`, the version the SDK pins.
+
+One thing to expect: `02-code-generation` will report **`sandboxed: false`** in
+the container, with the CLI's reason attached. That is deliberate and measured —
+bubblewrap cannot start inside an unprivileged container (`--privileged` did not
+help either), and installing it anyway turns a clean downgrade into a shell
+where *every* command fails. See the comment in the `Dockerfile`. In a container
+the container is the boundary, which is what the security review asks for
+regardless.
 
 **Already running Ollama locally?** The compose file deliberately does *not*
 publish port 11434, so it will not collide with yours. Its Ollama is reachable

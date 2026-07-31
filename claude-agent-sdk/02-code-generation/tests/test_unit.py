@@ -30,16 +30,25 @@ def make_runner(
     *,
     write_files: bool = True,
     used_bash: bool = True,
+    pytest_ran: bool = True,
     is_error: bool = False,
     stop_reason: str | None = None,
 ):
-    """Stub agent that simulates the built-in tools by writing into cwd."""
+    """Stub agent that simulates the built-in tools by writing into cwd.
+
+    ``pytest_ran`` controls whether pytest's own ``.pytest_cache`` appears —
+    i.e. whether the Bash calls actually *worked*. Defaulting it to True and
+    ``used_bash`` to True keeps "the happy path" honest; setting it False
+    reproduces a sandbox that refused every command.
+    """
 
     async def runner(prompt, options) -> AgentResult:
+        workdir = Path(options.cwd)
         if write_files:
-            workdir = Path(options.cwd)
             (workdir / "solution.py").write_text(SOLUTION_SRC, encoding="utf-8")
             (workdir / "test_solution.py").write_text(TEST_SRC, encoding="utf-8")
+        if pytest_ran:
+            (workdir / ".pytest_cache").mkdir(exist_ok=True)
 
         calls = [ToolCall(name="Write"), ToolCall(name="Write")]
         if used_bash:
@@ -86,6 +95,26 @@ def test_run_returns_generated_artifacts():
 def test_tests_passed_false_when_agent_never_ran_bash():
     """Files alone are not evidence — the agent must have executed the tests."""
     body = make_client(used_bash=False).post("/run", json={"task": "x"}).json()
+    assert body["tests_passed"] is False
+
+
+def test_tests_passed_false_when_bash_ran_but_pytest_never_did():
+    """The false positive this check exists for, reproduced.
+
+    Observed in a container: the shell was sandboxed but bubblewrap could not
+    start, so every Bash call died on `bwrap: pivot_root: Operation not
+    permitted`. The agent retried, gave up, reasoned about its own source and
+    declared the code correct — and `tests_passed` came back **true**, because
+    the check only asked whether Bash had been *invoked*.
+
+    Everything below is exactly what that run produced: both files written,
+    Bash called, no error, a normal `end_turn`. The only thing missing is
+    pytest's own footprint — which is the whole point.
+    """
+    body = make_client(pytest_ran=False).post("/run", json={"task": "x"}).json()
+    assert body["files"] == ["solution.py", "test_solution.py"]
+    assert "Bash" in body["tools_used"]
+    assert body["stop_reason"] == "end_turn"
     assert body["tests_passed"] is False
 
 

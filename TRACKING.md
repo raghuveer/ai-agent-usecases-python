@@ -314,6 +314,66 @@ Ollama, no gateway — surfaced four things the usual configuration hides:
     than skipped around. Live-verified twice: `sandboxed: false` with the CLI's
     reason attached.
 
+## Found while putting claude-agent-sdk in Docker (2026-07-31)
+
+20. **`tests_passed: true` for a run whose every test invocation failed.** The
+    worst defect found in this repo so far, and it was found by containerising
+    the approach rather than by any test.
+
+    In the image the shell sandbox *did* engage — but bubblewrap could not start
+    inside an unprivileged container, so every `Bash` call died on
+    `bwrap: pivot_root: Operation not permitted`. The agent did not stop. It
+    retried eight times, reworded, tried "without sandbox", and finally gave up
+    and **reasoned from reading its own source** that the implementation was
+    correct:
+
+    > *"It seems there's a sandbox issue. Let me verify the implementation is
+    > correct by reviewing the code logic … The implementation is solid."*
+
+    17 turns, **$0.99**, no test ever executed — and the API answered
+    `tests_passed: true`. `_ran_tests_successfully` asked whether `Bash` was
+    *invoked*, never whether it *worked*. Its own docstring promised the agent
+    "really executed the tests rather than just asserting they would pass",
+    which is precisely what it failed to detect.
+
+    Fixed by requiring **pytest's own `.pytest_cache`** in the workdir: written
+    by the tool, in the directory it ran in, so it is evidence rather than the
+    agent's account. Regression test reproduces the exact shape of that run
+    (both files written, `Bash` called, no error, clean `end_turn`) and asserts
+    false.
+
+    **What it still cannot prove is that the tests *passed*.** `lastfailed`
+    survives a later green run when test ids change, so it is not usable; and
+    the only authoritative check — running the tests ourselves — would execute
+    model-written code *outside* the sandbox the agent's own shell runs in,
+    trading a real boundary for a nicer status field. Recorded as a known limit
+    rather than papered over. **This is the cost of not owning the loop**: the
+    SDK does not surface tool *results* (see the `not_captured` list in
+    `trace.py`), so "did that command succeed?" is a question this approach
+    structurally cannot answer directly.
+
+21. **Docker needed no Node and no CLI install** — the Dockerfile said it did.
+    The SDK ships the Claude Code CLI as a native binary in a platform-tagged
+    wheel (`_bundled/claude`), and the committed lockfiles already carry the
+    manylinux wheels. The agent-SDK image built **with no Dockerfile change at
+    all**; `claude --version` in it returns 2.1.220, the version the SDK pins.
+    The restriction had been assumed from the SDK docs and never tested.
+
+22. **Installing bubblewrap made things strictly worse.** The obvious follow-up
+    to finding 19 was to add `bubblewrap` + `socat` so the container's sandbox
+    would be real. Measured both ways on the same task:
+
+    | image | result |
+    |---|---|
+    | without bwrap | CLI downgrades, says so; **4 turns, $0.16**, tests genuinely run |
+    | with bwrap installed | every Bash call fails; **17 turns, $0.99**, nothing proved |
+
+    `--privileged` did not fix it either — the error just moved
+    (`apply-seccomp: write /proc/self/uid_map: Operation not permitted`, Rancher
+    Desktop / Lima). So the image deliberately does **not** install them: a
+    half-working sandbox is worse than an absent one that reports itself. In a
+    container, the container is the boundary.
+
 ## Dependency: chromadb CVE-2026-45829 (assessed 2026-07-31)
 
 Two critical Dependabot alerts (`langchain/01-rag`, `langgraph/01-rag`).
@@ -334,6 +394,6 @@ Re-open if these examples ever switch to Chroma's client/server mode.
 
 ## Status
 - **10/10 use cases × 4 approaches = 40 projects built.**
-- `claude-agent-sdk`: **175 offline unit tests green**. **All 14 integration tests verified live and passing — all 10 use cases.** Two live passes found 8 defects plus 1 test bug; every one is fixed, and the security-relevant ones (F10, F11, F14) are in `docs/security-review.md`.
+- `claude-agent-sdk`: **176 offline unit tests green**. **All 14 integration tests verified live and passing — all 10 use cases.** Two live passes found 8 defects plus 1 test bug; every one is fixed, and the security-relevant ones (F10, F11, F14) are in `docs/security-review.md`.
 - raw-api / langchain / langgraph: re-pointed at `:8094` and **all 30 live-run 2026-07-30 — 30/30 passing** (18 free-local, 12 cloud). The sweep found one defect (finding 11 above) affecting 6 projects.
-- **Running total: 19 findings recorded; 18 of them surfaced by *running* the code, not by testing it.** The exception is finding 18 (`stop_reason` never reaching a response), which was found by reading. Across both the agent-SDK build and the older 30. Three — F9, F11, F14 — were security controls that were accepted, configured correctly, and simply did not take effect.
+- **Running total: 22 findings recorded; 21 of them surfaced by *running* the code, not by testing it.** The exception is finding 18 (`stop_reason` never reaching a response), which was found by reading. Across both the agent-SDK build and the older 30. Three — F9, F11, F14 — were security controls that were accepted, configured correctly, and simply did not take effect.

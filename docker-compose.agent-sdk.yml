@@ -1,0 +1,66 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Raghuveer Dendukuri
+# Author: Raghuveer Dendukuri · Co-author: Claude Code (Opus)
+#
+# The `claude-agent-sdk` projects, in a container.
+#
+#   PROJECT=claude-agent-sdk/01-rag \
+#   LLM_GATEWAY_KEY=sk-... \
+#   docker compose -f docker-compose.agent-sdk.yml up --build
+#
+# On Rancher Desktop (containerd), use `nerdctl compose` — and put the two
+# variables in a root `.env` instead of the command line: nerdctl interpolates
+# only from that file, not from the process environment, so the inline form
+# above trips the `:?` guard and stops. A root `.env` is gitignored (`**/.env`).
+#
+# Separate from `docker-compose.yml` because this approach cannot take the
+# zero-install path. The other three talk to a local Ollama over an
+# OpenAI-compatible API and need no key; the Agent SDK drives the Claude Code
+# harness, which small local models cannot sustain (see TRACKING.md). So this
+# needs a real Anthropic-compatible endpoint and a real key, and it will spend
+# money — every project caps AGENT_MAX_TURNS and AGENT_MAX_BUDGET_USD.
+#
+# What it does NOT need, contrary to the old note in the Dockerfile: Node, or
+# `npm install -g @anthropic-ai/claude-code`. The SDK's wheel is platform-tagged
+# and ships the CLI as a native binary; the committed lockfiles carry the
+# manylinux wheels, so `uv sync --locked` is the whole install. Verified in the
+# built image: `claude --version` → 2.1.220, the version the SDK pins.
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        PROJECT: ${PROJECT:-claude-agent-sdk/01-rag}
+    ports:
+      - "8000:8000"
+    environment:
+      # NOTE: no `/v1` suffix. The Agent SDK speaks the Anthropic surface and
+      # appends `/v1/messages` itself — the one config difference from the other
+      # three approaches, and the easiest thing to get wrong.
+      # Point this at your gateway, or unset it to reach api.anthropic.com.
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://host.docker.internal:8094}
+      # Required. `Authorization: Bearer` — the gateway rejects `x-api-key`, so
+      # the app passes this to the CLI as ANTHROPIC_AUTH_TOKEN, never
+      # ANTHROPIC_API_KEY. There is no default: a missing key should fail loudly
+      # rather than silently talk to the wrong place.
+      LLM_GATEWAY_KEY: ${LLM_GATEWAY_KEY:?set LLM_GATEWAY_KEY - this approach needs a real cloud model}
+      LLM_MODEL: ${LLM_MODEL:-claude-haiku}
+      AGENT_MAX_TURNS: ${AGENT_MAX_TURNS:-12}
+      AGENT_MAX_BUDGET_USD: ${AGENT_MAX_BUDGET_USD:-1.00}
+      TRACE_SINK: none
+      # 02-code-generation only. Left at its secure default: the CLI will report
+      # on stderr that it cannot sandbox here (bubblewrap is deliberately not in
+      # the image — see the Dockerfile for the measurements), and `/run` answers
+      # `sandboxed: false` with the reason. In a container the container is the
+      # boundary; treat this as the honest signal it is, not as a warning to mute.
+      SANDBOX_BASH: ${SANDBOX_BASH:-true}
+    extra_hosts:
+      # Lets LLM_BASE_URL reach a gateway running on the host.
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s

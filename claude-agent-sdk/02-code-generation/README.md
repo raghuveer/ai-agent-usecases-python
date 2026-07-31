@@ -28,11 +28,29 @@ built-in `Write` / `Read` / `Edit` / `Bash` tools do the work.
 
 ## Verifying success honestly
 
-`tests_passed` is deliberately conservative. It requires **all** of: both files
-exist, the agent actually invoked `Bash` (so it ran the tests rather than merely
-claiming they would pass), the run did not error, and it did not stop on
-`max_turns`. An agent that says "the tests pass" without running them does not
-satisfy this.
+`tests_passed` requires **all** of: both files exist, the agent invoked `Bash`,
+**pytest left its own `.pytest_cache` in the workdir**, the run did not error,
+and it did not stop on `max_turns`.
+
+That fourth condition was added after the other four proved insufficient — in a
+container where the shell sandbox engaged but bubblewrap could not start, every
+`Bash` call failed, the agent gave up and declared the code correct after
+*reading* it, and this field came back **true**. It had asked whether `Bash` was
+invoked, never whether it worked. `.pytest_cache` is written by pytest, in the
+directory it ran in, so it is evidence from the tool rather than a claim from
+the agent.
+
+**It still does not prove the tests passed, and that limit is the point.**
+`lastfailed` survives a later green run when test ids change, so it cannot serve
+as the signal; and the only authoritative check — running the tests here — would
+execute model-written code *outside* the sandbox the agent's own shell runs in,
+trading a real boundary for a better-looking status field.
+
+This is what not owning the loop costs. The SDK reports which tools were called,
+not what they returned (see the `not_captured` list in `trace.py`), so *"did
+that command succeed?"* is a question this approach cannot answer directly — and
+the honest response is to say so rather than infer it. The `raw-api` version, by
+contrast, runs the subprocess itself and reads the exit code.
 
 ## `cwd` is not a sandbox — verified the hard way
 
